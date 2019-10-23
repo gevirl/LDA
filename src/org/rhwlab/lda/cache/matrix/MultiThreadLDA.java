@@ -21,9 +21,6 @@ import org.jdom2.Element;
 import org.jdom2.output.Format;
 import org.jdom2.output.XMLOutputter;
 import org.rhwlab.lda.BagOfWords;
-import org.rhwlab.lda.cache.MarginalKDE;
-import org.rhwlab.lda.cache.PointEstimateDistribution;
-import org.rhwlab.lda.cache.TopicHistogramEstimator;
 
 /**
  *

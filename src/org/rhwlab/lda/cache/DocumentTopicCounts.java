@@ -35,7 +35,7 @@ public class DocumentTopicCounts implements Callable<int[][]> {
         }
         return nd;        
     }
-    static int[][] documentTopicCounts(int[][] z,int nTopics) {
+    static public int[][] documentTopicCounts(int[][] z,int nTopics) {
         return new DocumentTopicCounts(z,nTopics).getCounts();
     }
 }

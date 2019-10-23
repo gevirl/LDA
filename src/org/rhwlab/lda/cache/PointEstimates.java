@@ -10,8 +10,8 @@ package org.rhwlab.lda.cache;
  * @author gevirl
  */
 public class PointEstimates {
-    double[][] docEst;
-    double[][] wordEst;
+    public double[][] docEst;
+    public double[][] wordEst;
     
     public PointEstimates(double[][] docs,double[][] words){
         this.docEst = docs;

@@ -58,8 +58,8 @@ public class MultiThreadXMLBase {
             workerXMLFiles[index] = new File(dir,workerEle.getAttributeValue("file"));
         }
         
-        alpha = new RowSumMatrix(root.getChild("Alpha"));
-        beta = new RowSumMatrix(root.getChild("Beta"));
+        alpha = RowSumMatrix.factory(root.getChild("Alpha"));
+        beta = RowSumMatrix.factory(root.getChild("Beta"));
 
         System.out.printf("Closing xml file %s\n", xml.getPath());
     } 

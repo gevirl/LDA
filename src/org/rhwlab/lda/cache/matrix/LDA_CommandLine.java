@@ -26,8 +26,6 @@ import org.rhwlab.command.CommandLine;
 import org.rhwlab.lda.BagOfWords;
 import org.rhwlab.lda.JarFile;
 import org.rhwlab.lda.ChibEstimator;
-import org.rhwlab.lda.cache.MarginalEmpiric;
-
 
 /**
  *
@@ -54,12 +52,15 @@ public class LDA_CommandLine extends CommandLine {
     int chibIter = 1000;
     int chibBurnin = 200;
     File chibBOW;
-    double chibAlpha = 0.1;
 
     // lda options   
     int topics;
-    RowSumMatrix alpha ;
-    RowSumMatrix beta ;
+    RowSumMatrix alpha;
+    RowSumMatrix beta;
+    double alphaConc = 0.1;
+    double betaConc = 0.1;
+    File alphaFile = null;
+    File betaFile = null;
     int cacheSize = 10;
     File outDir;
     int ldaIter = 1000;
@@ -165,8 +166,7 @@ public class LDA_CommandLine extends CommandLine {
         MultiThreadXML lda = new MultiThreadXML(iterationDir);
         alpha = lda.getAlpha();
         beta = lda.getBeta();
-        int nWorkers = lda.getWorkersSize();
-        int nDocs = lda.getDocumentsSize();
+
         int nVocab = lda.getVocabSize();
         int nTopics = lda.getTopicsSize();
 
@@ -230,7 +230,7 @@ public class LDA_CommandLine extends CommandLine {
         Collection<Callable<Object>> workers = new ArrayList<>();
         ChibEstimator[] estimators = new ChibEstimator[nThreads];
         for (int i = 0; i < nThreads; ++i) {
-            estimators[i] = new ChibEstimator(phi, chibAlpha, seed + i);
+            estimators[i] = new ChibEstimator(phi, alphaConc, seed + i);
             estimators[i].setIterations(this.chibIter);
             estimators[i].setBurnin(this.chibBurnin);
         }
@@ -284,6 +284,18 @@ public class LDA_CommandLine extends CommandLine {
             lda = new MultiThreadLDA(iterationDir);  // adding iterations to exiting lda run
         } else {
             int[][] docs = BagOfWords.toDocumentFormat(bows.toArray(new BagOfWords[0]));
+            int vocab = bows.get(0).getVocabSize();
+            // set up the hyperparameter martrices
+            if (alphaFile != null) {
+                alpha = new RowSumFileMatrix(alphaConc,docs.length,this.topics,this.alphaFile);
+            } else {
+                alpha = new RowSumSymetricMatrix(this.alphaConc,this.topics);
+            }
+            if (betaFile != null) {
+                beta = new RowSumFileMatrix(betaConc,docs.length,this.topics,this.alphaFile);
+            } else {
+                beta = new RowSumSymetricMatrix(this.betaConc,vocab);
+            }            
             lda = new MultiThreadLDA(docs, bows.get(0).getVocabSize(), topics, alpha, beta, nThreads, cacheSize, seed, dist, statistic, precision);
         }
 
@@ -379,13 +391,13 @@ public class LDA_CommandLine extends CommandLine {
         return null;  // no error          
     }
 
-    public String ca(String s) {
-        return chibAlpha(s);
+    public String a(String s) {
+        return alpha(s);
     }
 
-    public String chibAlpha(String s) {
+    public String alpha(String s) {
         try {
-            chibAlpha = Double.parseDouble(s);
+            alphaConc = Double.parseDouble(s);
         } catch (NumberFormatException exc) {
             return exc.getMessage();
         }
@@ -398,13 +410,39 @@ public class LDA_CommandLine extends CommandLine {
 
     public String beta(String s) {
         try {
-           double v = Double.parseDouble(s);
-          
+            betaConc = Double.parseDouble(s);
+
         } catch (NumberFormatException exc) {
             return exc.getMessage();
         }
-        
+
         return null;  // no error
+    }
+
+    public String af(String s) {
+        return alphaFile(s);
+    }
+
+    public String alphaFile(String s) {
+        File f = new File(s);
+        if (f.exists()) {
+            alphaFile = f;
+            return null;
+        }
+        return String.format("AlphaFile %s not found", s);
+    }
+
+    public String bf(String s) {
+        return betaFile(s);
+    }
+
+    public String betaFile(String s) {
+        File f = new File(s);
+        if (f.exists()) {
+            betaFile = f;
+            return null;
+        }
+        return String.format("BetaFile %s not found", s);
     }
 
     public String t(String s) {
@@ -651,10 +689,10 @@ public class LDA_CommandLine extends CommandLine {
         System.out.println("\t-part  \n\t\tpartition validation, partitions BOW file and writes commands to stdout");
 
         System.out.println("\nLDA Options:");
-        System.out.println("\t-a, -alpha (float)\n\t\tsymmetric Dirichlet parameter for document distribution, default=0.1");
-        System.out.println("\t-af, -alphaFile (path)\n\t\tfile of Dirichlet parameters for document distributions, no default");
-        System.out.println("\t-b, -beta (float)\n\t\tsymmetric Dirichlet parameter for topic distribution, default=0.1");
-        System.out.println("\t-bf, -betaFile (path)\n\t\tfile of Dirichlet parameters for topic distributions, no default");
+        System.out.println("\t-a, -alpha (float)\n\t\tDirichlet concentration parameter for document distribution, default=0.1");
+        System.out.println("\t-af, -alphaFile (path)\n\t\tfile of vector base measure priors for document distributions, no default");
+        System.out.println("\t-b, -beta (float)\n\t\tDirichlet concentration parameter for topic distribution, default=0.1");
+        System.out.println("\t-bf, -betaFile (path)\n\t\tfile of vector base measure priors for topic distributions, no default");
         System.out.println("\t-ch, -cache (integer)\n\t\tOutput cache size, if cache size = 0 then compute point estimates during lda, default=10");
         System.out.println("\t-ib, -inputBOW (path)\n\t\tinput bag of words file, no default");
         System.out.println("\t-li, -ldaIterations (integer)\n\t\tnumer of lda iterations, default=1000");
@@ -671,7 +709,6 @@ public class LDA_CommandLine extends CommandLine {
         System.out.println("\t-v, -verbose (0-7)\n\t\tverbose level of output, default = 1;");
 
         System.out.println("\nChib Estimation Options:");
-        System.out.println("\t-ca, -chibAlpha (float)\n\t\t symetric Dirichlet parameter for document distribution, default=0.1");
         System.out.println("\t-ci, -chibIterations (integer)\n\t\tnumber of Chib validation iterations, default=1000");
         System.out.println("\t-cb, -chibBurn (integer)\n\t\tChib validation burnin, default=200");
         System.out.println("\t-ic, -inputChibBOW (path)\n\t\tinput bag of words file, no default");
@@ -690,7 +727,7 @@ public class LDA_CommandLine extends CommandLine {
         LDA_CommandLine lda = new LDA_CommandLine();
         lda.process(args, true);
         LocalDateTime finished = LocalDateTime.now();
-        System.out.printf("Starting %s - Finished %s\n",dtf.format(starting),dtf.format(finished));        
+        System.out.printf("Starting %s - Finished %s\n", dtf.format(starting), dtf.format(finished));
     }
 
 }

@@ -62,7 +62,7 @@ public class Likelihood implements Callable<Double> {
         double[][] phi = new double[K][V];
         for (int k = 0; k < K; k++) {
             for (int w = 0; w < V; w++) {
-                phi[k][w] = (nw[w][k] + beta.getValues()[k][w]) / (nwsum[k] + beta.getSums()[k]);
+                phi[k][w] = (nw[w][k] + beta.getValue(k,w)) / (nwsum[k] + beta.getSum(k));
             }
         }
         return phi;
@@ -96,7 +96,7 @@ public class Likelihood implements Callable<Double> {
 
         for (int m = 0; m < D; m++) {
             for (int k = 0; k < K; k++) {
-                theta[m][k] = (nd[m][k] + alpha.getValues()[m][k]) / (ndsum[m] + alpha.getSums()[m]);
+                theta[m][k] = (nd[m][k] + alpha.getValue(m,k)) / (ndsum[m] + alpha.getSum(m));
             }
         }
         return theta;

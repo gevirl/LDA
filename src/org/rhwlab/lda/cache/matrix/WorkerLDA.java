@@ -134,8 +134,8 @@ public class WorkerLDA extends WorkerXML implements Callable {
         double[] p = new double[K];
         for (int k = 0; k < K; k++) {
             int w = documents[m][n];
-            p[k] = (nwGlobal[w][k] + beta.getValues()[k][w]) / (nwsumGlobal[k] + beta.getSums()[k])
-                    * (nd[m][k] + alpha.getValues()[m][k]) / (ndsum[m] + alpha.getSums()[m]);
+            p[k] = (nwGlobal[w][k] + beta.getValue(k,w)) / (nwsumGlobal[k] + beta.getSum(k))
+                    * (nd[m][k] + alpha.getValue(m,k)) / (ndsum[m] + alpha.getSum(m));
         }
         // cumulate multinomial parameters
         for (int k = 1; k < p.length; k++) {

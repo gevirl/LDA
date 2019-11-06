@@ -25,7 +25,6 @@ import java.util.concurrent.Future;
 import org.rhwlab.command.CommandLine;
 import org.rhwlab.lda.BagOfWords;
 import org.rhwlab.lda.JarFile;
-import org.rhwlab.lda.ChibEstimator;
 
 /**
  *
@@ -273,7 +272,7 @@ public class LDA_CommandLine extends CommandLine {
     }
 
     // run the lda model on the input bow files and parameters for given number of topics
-    private void runLDA() throws Exception {
+    private String runLDA() throws Exception  {
 
         iterationDir = iterationDirectory(this.outDir);  // output iterations directory
         Files.createDirectories(iterationDir.toPath());
@@ -288,11 +287,16 @@ public class LDA_CommandLine extends CommandLine {
             // set up the hyperparameter martrices
             if (alphaFile != null) {
                 alpha = new RowSumFileMatrix(alphaConc,docs.length,this.topics,this.alphaFile);
+                String s = ((RowSumFileMatrix)alpha).build();
+                if (s != null) return s;
             } else {
                 alpha = new RowSumSymetricMatrix(this.alphaConc,this.topics);
+                
             }
             if (betaFile != null) {
-                beta = new RowSumFileMatrix(betaConc,docs.length,this.topics,this.alphaFile);
+                beta = new RowSumFileMatrix(betaConc,docs.length,this.topics,this.betaFile);
+                String s = ((RowSumFileMatrix)beta).build();
+                if (s != null) return s;
             } else {
                 beta = new RowSumSymetricMatrix(this.betaConc,vocab);
             }            
@@ -307,18 +311,19 @@ public class LDA_CommandLine extends CommandLine {
         if (cacheSize == 0) {
             this.pointEstimateProcessing = false;
         }
+        return null;
     }
 
     @Override
     public String post() {
-
+        String ret = null;
         rnd = new Random(seed);
         try {
             if (ldaProcessing) {
                 if (rid == null) {
                     rid = bows.get(0).getFile().getName().replace(".bow", "");  // base the runid on the first bow file name
                 }
-                runLDA();
+                ret = runLDA();
             }
             if (pointEstimateProcessing) {
                 runPointEstimate();
@@ -336,7 +341,7 @@ public class LDA_CommandLine extends CommandLine {
             exc.printStackTrace(new PrintWriter(writer));
             return writer.toString();
         }
-        return null;
+        return ret;
     }
 
     public String tn(String s) {

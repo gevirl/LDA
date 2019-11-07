@@ -106,4 +106,9 @@ public class RowSumFileMatrix implements RowSumMatrix {
     public double getSum(int r) {
         return rowSums[r];
     }
+
+    @Override
+    public double getConcentration() {
+        return this.conc;
+    }
 }

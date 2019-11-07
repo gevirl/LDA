@@ -12,6 +12,7 @@ import org.jdom2.Element;
  * @author gevirl
  */
 public interface RowSumMatrix {
+    public double getConcentration();
     public double getValue(int r,int c);
     public double getSum(int r);
     public Element toXML(String name);

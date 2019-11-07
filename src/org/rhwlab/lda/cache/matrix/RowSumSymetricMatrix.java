@@ -42,5 +42,10 @@ public class RowSumSymetricMatrix implements RowSumMatrix {
         ret.setAttribute("sum",Double.toString(sum));
         return ret;
     }
+
+    @Override
+    public double getConcentration() {
+        return this.sum;
+    }
     
 }

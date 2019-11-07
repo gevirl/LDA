@@ -141,8 +141,8 @@ public class LDA_CommandLine extends CommandLine {
     private String LDAOptions(ArrayList<BagOfWords> bowList, File dir, String runID) {
         StringBuilder builder = new StringBuilder();
         builder.append("-lda ");
-        builder.append(String.format("-a %f ", alpha));
-        builder.append(String.format("-b %f ", beta));
+        builder.append(String.format("-a %f ", alpha.getConcentration()));
+        builder.append(String.format("-b %f ", beta.getConcentration()));
         for (BagOfWords bow : bowList) {
             builder.append(String.format("-ib %s ", bow.getFile().getPath()));
         }
@@ -268,7 +268,7 @@ public class LDA_CommandLine extends CommandLine {
     }
 
     private String runName(String baseName) {
-        return String.format("%s_topics%d_alpha%.3f_beta%.3f", baseName, topics, alpha, beta);
+        return String.format("%s_topics%d_alpha%.3f_beta%.3f", baseName, topics, alpha.getConcentration(), beta.getConcentration());
     }
 
     // run the lda model on the input bow files and parameters for given number of topics

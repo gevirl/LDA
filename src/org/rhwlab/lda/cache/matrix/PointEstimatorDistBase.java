@@ -68,8 +68,8 @@ abstract public class PointEstimatorDistBase implements PointEstimateDistributio
         stream.printf("Documents : %d\n", docs.length);
         stream.printf("Vocabulary : %d\n", nVocab);
         stream.printf("Total Words : %d\n", totalWords);
-        stream.printf("Alpha : %f\n", alpha);
-        stream.printf("Beta : %f\n", beta);
+        stream.printf("Alpha : %f\n", alpha.getConcentration());
+        stream.printf("Beta : %f\n", beta.getConcentration());
         stream.printf("LogLikelihood : %e\n", logLike);
         stream.printf("Perplexity : %e\n", perplexity);
         stream.close();

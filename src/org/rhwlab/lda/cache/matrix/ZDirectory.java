@@ -217,12 +217,5 @@ public class ZDirectory {
         return this.iterWorkMap.lastKey();
     }
 
-    static public void main(String[] args) throws Exception {
-        File f = new File("/net/waterston/vol2/home/gevirl/ldatest/zcacheout/topics_50/test_topics50_alpha0.010_beta0.010");
-        MultiThreadXML lda = new MultiThreadXML(f);
-        ZDirectory zdir = new ZDirectory(f, lda, 4);
- //       ZHistogram mode = zdir.zHistogram();
-        //       mode.report(new File(f, "zmode"), lda.getDocuments());
-        int uixduif = 0;
-    }
+
 }

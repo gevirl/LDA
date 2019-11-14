@@ -20,7 +20,7 @@ import java.util.concurrent.Future;
  */
 public class MultiThreadXML extends MultiThreadXMLBase {
 
-    int[][] docs;
+    
     WorkerXML[] workerXMLs;
 
     public MultiThreadXML(File dir) throws Exception {
@@ -38,16 +38,7 @@ public class MultiThreadXML extends MultiThreadXMLBase {
             future.get();
         }
 
-        docs = new int[getDocumentsSize()][];
-        int r = 0;
-        for (int w = 0; w < getWorkersSize(); ++w) {
-            int[][] nd = workerXMLs[w].getDocuments();
-            for (int d = 0; d < nd.length; ++d) {
-                docs[r] = nd[d];
-                ++r;
-            }
-        }
-
+        docs = getDocuments(workerXMLs);
     }
 
     public int[][] getDocuments() throws Exception {
@@ -56,5 +47,19 @@ public class MultiThreadXML extends MultiThreadXMLBase {
 
     public WorkerXML[] getWorkers() throws Exception {
         return workerXMLs;
+    }
+    
+    static int[][] getDocuments(WorkerXML[] workerXMLs){
+        int n = workerXMLs.length;
+        int[][] docs = new int[n][];
+        int r = 0;
+        for (int w = 0; w < n; ++w) {
+            int[][] nd = workerXMLs[w].getDocuments();
+            for (int d = 0; d < nd.length; ++d) {
+                docs[r] = nd[d];
+                ++r;
+            }
+        }
+        return docs;
     }
 }

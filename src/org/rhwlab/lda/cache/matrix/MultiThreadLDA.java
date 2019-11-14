@@ -8,6 +8,7 @@ package org.rhwlab.lda.cache.matrix;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
+import java.io.PrintStream;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -20,7 +21,8 @@ import java.util.concurrent.Future;
 import org.jdom2.Element;
 import org.jdom2.output.Format;
 import org.jdom2.output.XMLOutputter;
-import org.rhwlab.lda.BagOfWords;
+import org.rhwlab.lda.cache.DocumentTopicCounts;
+import org.rhwlab.lda.cache.WordTopicCounts;
 
 /**
  *
@@ -28,6 +30,7 @@ import org.rhwlab.lda.BagOfWords;
  */
 public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
 
+    
     int[][] nw;  //  V x K ,vocab by topic
     int[] nwsum;  // K , sum over vocab
 
@@ -35,16 +38,18 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
     WorkerLDA[] workersArray;
 
     File outputDir = null;  // report counts for each iteration and saved state to this directory
-
     int thinning = 1;   // number of iterations between each save 
-
     int burnIn;
 
-    List<int[][]> nwCache = new ArrayList<>();
-    List<int[][]>[] ndCaches;
+//    List<int[][]> nwCache = new ArrayList<>();
+//    List<int[][]>[] ndCaches;
 
     PointEstimateDistribution peDist;
     String statistic;
+    
+    boolean maxLike=false;  //  if true, the iteration with the maximum likelihood is found during iterations
+    double logLike = Double.NEGATIVE_INFINITY;
+    int[][] maxLikeZ = null;
     
     public MultiThreadLDA(int[][] documents, int V, int K, RowSumMatrix alpha, RowSumMatrix beta, int nThreads, int cSize,String dist,String stat,double prec) {
         this(documents, V, K, alpha, beta, nThreads, cSize, 900,dist,stat,prec);
@@ -52,6 +57,7 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
 
     public MultiThreadLDA(int[][] documents, int V, int K, RowSumMatrix alpha, RowSumMatrix beta, int nThreads, int cSize, long seed, String dist,String stat,double prec) {
         super(nThreads);
+        this.docs = documents;
         this.D = documents.length;
         this.V = V;
         this.K = K;
@@ -60,12 +66,12 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
         this.cacheSize = cSize;
         this.statistic = stat;
 
-
+/*
         ndCaches = new List[nThreads];
         for (int i = 0; i < nThreads; ++i) {
             ndCaches[i] = new ArrayList<>();
         }
-
+*/
         // build all the workers
         int nDocs = documents.length / nThreads + 1;  // number of documents per thread
         int start = 0;
@@ -126,7 +132,7 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
         nw = new int[V][K];
         nwsum = new int[K];
         accumCounts();
- 
+        docs = MultiThreadXML.getDocuments(workersArray);
     }
 
 
@@ -210,6 +216,15 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
             if (peDist != null && i >= burnIn * thinning && i % thinning == 0) {
                 peDist.add(this);
             }
+            if (maxLike){
+                int[][] nd = this.getDocumentTopicCounts();
+                Likelihood like = new Likelihood(docs,nw,nd,alpha,beta,i);
+                double logL = Math.log(like.call());
+                if (logL > this.logLike){
+                    this.logLike = logL;
+                    this.maxLikeZ = this.getZ();
+                }
+            }
         }
         // flush any remaining iterations
         for (int w = 0; w < this.workersArray.length; ++w) {
@@ -218,7 +233,27 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
         saveAsXML(outputDir);
         if (peDist != null) {
             // report the point estimate 
-            peDist.statisticReport(outputDir, statistic, burnIn, alpha, beta, totalWords, this.getDocuments(), iterations + iterationOffset, K, V);
+            peDist.statisticReport(outputDir, statistic, burnIn, alpha, beta, totalWords, this.docs, iterations + iterationOffset, K, V);
+        }
+        
+        // report the maximum likelihood iteration
+        if (maxLike){
+            DocumentTopicCounts dtc = new DocumentTopicCounts(maxLikeZ,K);
+            int[][] nd = dtc.call();
+            WordTopicCounts wtc = new WordTopicCounts(maxLikeZ,V,K,docs);
+            int[][] nw = wtc.call();
+            
+            PrintStream stream = new PrintStream(new File(outputDir,"MaxLikelihoodTopics.txt"));
+            printIntegerMatrix(stream,maxLikeZ);
+            stream.close();
+            
+            stream = new PrintStream(new File(outputDir,"MaxLikelihoodDocumentTopicCounts.txt"));
+            printIntegerMatrix(stream,nd);
+            stream.close();
+            
+            stream = new PrintStream(new File(outputDir,"MaxLikelihoodWordTopicCounts.txt"));
+            printIntegerMatrix(stream,nw);
+            stream.close();            
         }
         return null;
     }
@@ -245,23 +280,16 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
 
     public void setBurnIn(int s) {
         burnIn = s;
-
     }
 
     public void setIterations(int it) {
         this.iterations = it;
     }
 
+    public void setMaxLike(boolean b){
+        this.maxLike = b;
+    }
     public int[][] getDocuments() {
-        int[][] docs = new int[D][];
-        int r = 0;
-        for (int w = 0; w < this.workersArray.length; ++w) {
-            int[][] wd = workersArray[w].getDocuments();
-            for (int d = 0; d < wd.length; ++d) {
-                docs[r] = wd[d];
-                ++r;
-            }
-        }
         return docs;
     }
 
@@ -327,45 +355,20 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
         return this.nw;
     }
 
-    // arg[0] - K
-    // args[1] - output file prefix
-    // args[2] - n cores
-    // args[3] - alpha and possibly beta
-    // args[4] - bow file
-    // args[5] - random seed
-    // args[6] = beta
-    public static void main(String[] args) throws Exception {
-
-        long seed = 900;
-        if (args.length >= 6) {
-            seed = Long.valueOf(args[5]);
+    public double getMaxLogLikelihood(){
+        return this.logLike;
+    }
+    public int[][] getMaxLikelihoodZ(){
+        return this.maxLikeZ;
+    }
+    
+    static void printIntegerMatrix(PrintStream stream,int[][] m){
+        for (int r=0 ; r<m[r].length ; ++r){
+            stream.printf("%d", m[r][0]);
+            for (int c=1 ; c<m[r].length ; ++c){
+                stream.printf(",%d",m[r][c]);
+            }
+            stream.println();
         }
-        double alpha = Double.valueOf(args[3]);
-        double beta = alpha;
-        if (args.length >= 7) {
-            beta = Double.valueOf(args[6]);
-        }
-
-        System.out.println("Latent Dirichlet Allocation using Gibbs Sampling.");
-
-        BagOfWords bow = null;
-
-        if (args.length >= 5) {
-            bow = new BagOfWords(args[4]);
-        } else {
-//            bow = new BagOfWords("/net/waterston/vol2/home/gevirl/Cao_cellCounts.bow");
-            bow = new BagOfWords("/nfs/waterston/tdurham/ATAC_sequencing/all_sciATAC/data/lda_root/all_L2_sciATAC_merged_summits.slop50.peaktable.cisTopic.sparsemat.bow");
-//            bow = new BagOfWords("/nfs/waterston/tdurham/ATAC_sequencing/20181113_sciATAC/data/processed_all_merged/scrublet/w_filt_peaks/all_L2_sciATAC_merged_summits.slop100.with_syn_doublets.cisTopic.sparsemat.bow");
-        }
-
-        int[][] docs = bow.toDocumentFormat();
-        int V = bow.getVocabSize();
-        int K = Integer.valueOf(args[0]);
-        int nCores = Integer.valueOf(args[2]);
-//        MultiThreadLDA lda = new MultiThreadLDA(docs, V, K, alpha, beta, nCores, seed);
-//        lda.call();
-//        lda.report(filePrefix(args[1], K, alpha), bow.getTotalWords());
-
-        int asdohsdi = 0;
     }
 }

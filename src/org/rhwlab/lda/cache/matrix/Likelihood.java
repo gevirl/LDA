@@ -29,11 +29,11 @@ public class Likelihood implements Callable<Double> {
     }
     @Override
     public Double call() throws Exception {
-        System.out.printf("Likelihood started on iteration %d\n",iter);
+ //       System.out.printf("Likelihood started on iteration %d\n",iter);
         double[][] phi = phi(nw, beta);
         double[][] theta = theta(nd, alpha);
         Double ret =  computeLikelihood(docs, phi, theta);
-        System.out.printf("Likelihood finished on iteration %d\n",iter);
+//        System.out.printf("Likelihood finished on iteration %d\n",iter);
         return ret;
     }
 

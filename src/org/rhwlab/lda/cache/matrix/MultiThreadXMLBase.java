@@ -16,7 +16,7 @@ import org.jdom2.input.SAXBuilder;
  * @author gevirl
  */
 public class MultiThreadXMLBase {
-
+    int[][] docs;
     int V;  // vocab size
     int K;  // number of topics
     int D;  // number of dcouments

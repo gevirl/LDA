@@ -45,6 +45,7 @@ public class LDA_CommandLine extends CommandLine {
     boolean ldaProcessing = false;
     boolean chibProcessing = false;
     boolean pointEstimateProcessing = false;
+    boolean maxLikeProcessing = false;
 
     // chib options
     File phiFile;
@@ -268,7 +269,7 @@ public class LDA_CommandLine extends CommandLine {
     }
 
     private String runName(String baseName) {
-        return String.format("%s_topics%d_alpha%.3f_beta%.3f", baseName, topics, alpha.getConcentration(), beta.getConcentration());
+        return String.format("%s_topics%d_alpha%.3f_beta%.3f", baseName, topics, this.alphaConc, this.betaConc);
     }
 
     // run the lda model on the input bow files and parameters for given number of topics
@@ -307,6 +308,7 @@ public class LDA_CommandLine extends CommandLine {
         lda.setIterations(ldaIter);
         lda.setBurnIn(skip);
         lda.setThinning(thining);
+        lda.setMaxLike(this.maxLikeProcessing);
         lda.call();
         if (cacheSize == 0) {
             this.pointEstimateProcessing = false;
@@ -605,6 +607,9 @@ public class LDA_CommandLine extends CommandLine {
         this.chibProcessing = true;
     }
 
+    public void maxLike(){
+        maxLikeProcessing = true;
+    }
     public String d(String str) {
         if (str.equalsIgnoreCase("kde") || str.equalsIgnoreCase("empiric") || str.equalsIgnoreCase("topic") || str.equalsIgnoreCase("none")) {
             dist = str;
@@ -689,6 +694,7 @@ public class LDA_CommandLine extends CommandLine {
 
         System.out.println("\nProcessing Directives:");
         System.out.println("\t-lda  \n\t\tlda iterations");
+        System.out.println("\t-maxLike  \n\t\treport the iteration with the maximum likelihood");
         System.out.println("\t-pe  \n\t\tpoint estimate from lda iterations");
         System.out.println("\t-chib  \n\t\tchib estimation");
         System.out.println("\t-part  \n\t\tpartition validation, partitions BOW file and writes commands to stdout");

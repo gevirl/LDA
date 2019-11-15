@@ -219,7 +219,7 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
             if (maxLike){
                 int[][] nd = this.getDocumentTopicCounts();
                 Likelihood like = new Likelihood(docs,nw,nd,alpha,beta,i);
-                double logL = Math.log(like.call());
+                double logL = like.call();
                 if (logL > this.logLike){
                     this.logLike = logL;
                     this.maxLikeZ = this.getZ();
@@ -253,7 +253,11 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
             
             stream = new PrintStream(new File(outputDir,"MaxLikelihoodWordTopicCounts.txt"));
             printIntegerMatrix(stream,nw);
-            stream.close();            
+            stream.close(); 
+            
+            stream = new PrintStream(new File(outputDir,"MaxLogLikelihood.txt"));
+            stream.printf("%f\n", logLike);
+            stream.close();
         }
         return null;
     }
@@ -363,7 +367,7 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
     }
     
     static void printIntegerMatrix(PrintStream stream,int[][] m){
-        for (int r=0 ; r<m[r].length ; ++r){
+        for (int r=0 ; r<m.length ; ++r){
             stream.printf("%d", m[r][0]);
             for (int c=1 ; c<m[r].length ; ++c){
                 stream.printf(",%d",m[r][c]);

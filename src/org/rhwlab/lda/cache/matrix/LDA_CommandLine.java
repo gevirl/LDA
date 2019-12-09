@@ -295,7 +295,7 @@ public class LDA_CommandLine extends CommandLine {
                 
             }
             if (betaFile != null) {
-                beta = new RowSumFileMatrix(betaConc,docs.length,this.topics,this.betaFile);
+                beta = new RowSumFileMatrix(betaConc,this.topics,vocab,this.betaFile);
                 String s = ((RowSumFileMatrix)beta).build();
                 if (s != null) return s;
             } else {

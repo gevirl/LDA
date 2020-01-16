@@ -51,9 +51,7 @@ public class RowSumFileMatrix implements RowSumMatrix {
                 if (tokens.length != nCols) {
                     return String.format("File: %s, row length is not %d", file.getPath(), nCols);
                 }
-                for (int c = 0; c < nCols; ++c) {
-                    values[r][c] = conc * Double.valueOf(tokens[c]);
-                }
+
                 double sum = 0.0;
                 for (int c = 0; c < nCols; ++c) {
                     sum = sum  + values[r][c];
@@ -61,6 +59,11 @@ public class RowSumFileMatrix implements RowSumMatrix {
                 if (sum < .99 || sum >1.01){
                     return String.format("File: %s , row %d does not sum to one",file.getPath(),r);
                 }
+                
+                for (int c = 0; c < nCols; ++c) {
+                    values[r][c] = conc * Double.valueOf(tokens[c]);
+                }
+                
                 ++r;
                 line = reader.readLine();
             }

@@ -220,7 +220,11 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
                 int[][] nd = this.getDocumentTopicCounts();
                 Likelihood like = new Likelihood(docs,nw,nd,alpha,beta,i);
                 double logL = like.call();
-                if (logL > this.logLike){
+                if (i == 1){
+                    this.logLike = logL;
+                    this.maxLikeZ = this.getZ(); 
+                }
+                else if (logL > this.logLike){
                     this.logLike = logL;
                     this.maxLikeZ = this.getZ();
                 }

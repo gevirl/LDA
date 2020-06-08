@@ -186,6 +186,7 @@ public class ChibEstimator implements Callable {
     }
 
     public void optimize() {
+        Random rnd = new Random();
         for (int pos = 0; pos < Nd; ++pos) {
             // remove the topic at the given word position  from the counts
             --Nz[z[pos]];
@@ -197,7 +198,7 @@ public class ChibEstimator implements Callable {
 
             // find topic with maximum probability and choose that topic
             double max = 0.0;
-            int topic = -1;
+            int topic = rnd.nextInt(p.length);
             for (int t = 0; t < T; ++t) {
                 if (p[t] > max) {
                     max = p[t];

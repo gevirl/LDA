@@ -122,6 +122,9 @@ public class Likelihood implements Callable<Double> {
                 for (int t = 0; t < K; ++t) {
                     sum += theta[d][t] * phi[t][v];
                 }
+                if (sum == 0.0){
+                    int iuasdfiusdf=0;
+                }
                 loglikelihood += Math.log(sum);
             }
         }

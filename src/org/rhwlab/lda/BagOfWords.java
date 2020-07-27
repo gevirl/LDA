@@ -7,13 +7,17 @@ package org.rhwlab.lda;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileReader;
+import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Random;
 import java.util.TreeMap;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.ZipException;
 
 /**
  *
@@ -24,8 +28,8 @@ public class BagOfWords {
     File file;
     int N;
     int V;
-    int W;
-    int total;
+    int W;  // number of line in file (less the header)
+    int total;  // total number of words in the data
 
     public BagOfWords(String fileStr)throws Exception {
         this(new File(fileStr));
@@ -63,7 +67,7 @@ public class BagOfWords {
     }
     public void saveAsBagOfWordsFile(List docs, File file) throws Exception {
         PrintStream stream = new PrintStream(file);
-        stream.printf("%d\n%d\n%d\n", docs.size(), V, 0);
+        stream.printf("%d\n%d\n%d\n", docs.size(), V, total);
         for (int d = 0; d < docs.size(); ++d) {
             for (Entry e : asMap((int[]) docs.get(d)).entrySet()) {
                 int w = (Integer) e.getKey() + 1;
@@ -179,14 +183,14 @@ public class BagOfWords {
         return N;
     }
     public BufferedReader readHeader() throws Exception {
-        BufferedReader reader = new BufferedReader(new FileReader(file));
+        BufferedReader reader = openFile();
         N = Integer.valueOf(reader.readLine());
         V = Integer.valueOf(reader.readLine());
         W = Integer.valueOf(reader.readLine()); 
         return reader;
     }
 
-    private void listToInt(List<Integer> list, int i, int[][] ret) {
+    public void listToInt(List<Integer> list, int i, int[][] ret) {
         Integer[] v = list.toArray(new Integer[0]);
         int[] r = new int[v.length];
         for (int j = 0; j < v.length; ++j) {
@@ -196,6 +200,17 @@ public class BagOfWords {
         list.clear();
     }
 
+    public BufferedReader openFile()throws Exception {
+        BufferedReader reader = null;
+        try {
+            GZIPInputStream gzipStream = new GZIPInputStream(new FileInputStream(file));
+            reader = new BufferedReader(new InputStreamReader(gzipStream));
+        } catch (ZipException exc) {
+            reader = new BufferedReader(new FileReader(file));
+        }
+        return reader;
+    }
+    
     static public void main(String[] args) throws Exception {
         BagOfWords bow = new BagOfWords("/net/waterston/vol2/home/gevirl/Cao_cellCounts_10.bow");
         File[] files = bow.partition(5, new File("/net/waterston/vol2/home/gevirl"), new Random());

@@ -5,6 +5,7 @@
  */
 package org.rhwlab.lda.cache;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -15,7 +16,7 @@ import java.util.concurrent.Future;
  *
  * @author gevirl
  */
-// all the worker ZIterationFiles for a given set of itertions
+// all the worker ZIterationFiles for a given set of iterations
 // assumes the skip is less than the number of records in the files
 public class ZIterationFiles  {
 
@@ -33,6 +34,33 @@ public class ZIterationFiles  {
 
     // multithread reading of all individual worker files and appending the documents together into a single z array for each iteration
     public int[][][] readFiles() throws Exception {
+        int nWorkers = files.size();
+        ArrayList[] zLists = new ArrayList[nWorkers];
+        int w = 0;
+        for (WorkerZIterationFile file : files){
+            zLists[w] = file.readZlist();
+            ++w;
+        }
+        int nrecs = zLists[0].size();  // number of iterations int the set of workers
+        int[][][] ret = new int[nrecs-skip][][];
+        for (int i = 0; i < ret.length; ++i) {
+            ret[i] = new int[nDocs][];
+        }
+        
+        int iter = 0; 
+        for (int i = skip; i < nrecs; ++i) {
+            int d = 0;
+            for (Object zList : zLists) {
+                int[][][] z = (int[][][])zList;                             
+                for (int j = 0; j < z[i].length; ++j) {
+                    ret[iter][d] = z[i][j];
+                    ++d;
+                }               
+            }
+            ++iter;
+        }        
+        
+ /*       
         ExecutorService service = Executors.newWorkStealingPool();
         List<Future<int[][][]>> futures = service.invokeAll(files);
 
@@ -54,7 +82,7 @@ public class ZIterationFiles  {
             }
             ++iter;
         }
- 
+ */
         return ret;
     }
 

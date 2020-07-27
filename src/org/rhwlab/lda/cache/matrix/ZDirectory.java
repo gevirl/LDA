@@ -30,25 +30,25 @@ import org.rhwlab.lda.cache.ZIterationFiles;
 public class ZDirectory {
 
     File dir;
-    MultiThreadXML lda;
+    CompletedRunLDA lda;
 
     TreeMap<Integer, TreeMap<Integer, WorkerZIterationFile>> iterWorkMap = new TreeMap<>(); // iter,worker -> file
     TreeMap<Integer, TreeMap<Integer, WorkerZIterationFile>> workIterMap = new TreeMap<>();  // worker,iter -> file
     TreeMap<Integer,Integer> countMap = new TreeMap<>(); // iter -> record count
     
     int nTopics;
-    int nWorkers;
+//    int nWorkers;
     int nDocs;
     int parallelism;
 
-    public ZDirectory(File dir, MultiThreadXML lda, int parallelism) throws Exception {
+    public ZDirectory(File dir, CompletedRunLDA lda, int parallelism) throws Exception {
         this.dir = dir;
         this.lda = lda;
         this.parallelism = parallelism;
 
         nTopics = lda.getTopicsSize();
-        WorkerXML[] workers = lda.getWorkers();
-        nWorkers = workers.length;
+//        WorkerXML[] workers = lda.getWorkers();
+//        nWorkers = workers.length;
         nDocs = lda.getDocumentsSize();
 
         // make a set of iterations 
@@ -68,7 +68,8 @@ public class ZDirectory {
             if (name.startsWith("Iter")) {
                 int iter = Integer.valueOf(name.substring(4, 10));
                 int w = Integer.valueOf(name.substring(16, name.indexOf(".Z")));
-                int recCount  = workers[w].getRecordCount(file);
+ //               int recCount  = workers[w].getRecordCount(file);   // number of iteration in the file
+                int recCount = lda.getRecordCount(file.getPath());
                 countMap.put(iter, recCount);
                 WorkerZIterationFile zFile = new WorkerZIterationFile(file);
 
@@ -112,8 +113,7 @@ public class ZDirectory {
 
         System.out.println("Ending addTo");
     }
-    
-
+ 
     public void iterationsReport(PrintStream likeStream, File outDir) throws Exception {
         System.out.println("Starting Iterations Report");
         int[][] docs = lda.getDocuments();
@@ -208,11 +208,11 @@ public class ZDirectory {
         }
 
     }
-
+/*
     public MultiThreadXML getLDA() {
         return this.lda;
     }
-
+*/
     public int lastIteration() {
         return this.iterWorkMap.lastKey();
     }

@@ -46,7 +46,7 @@ public class WorkerLDA extends WorkerXML implements Callable {
 
     public WorkerLDA(File xml) throws Exception {
         super(xml);
-        super.call();
+        super.call();  // this reads the worker xml
     }
 
     final void initialState() {

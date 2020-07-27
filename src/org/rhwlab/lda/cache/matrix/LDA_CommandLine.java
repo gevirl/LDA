@@ -25,6 +25,7 @@ import java.util.concurrent.Future;
 import org.rhwlab.command.CommandLine;
 import org.rhwlab.lda.BagOfWords;
 import org.rhwlab.lda.JarFile;
+import org.rhwlab.lda.MatrixMarket;
 
 /**
  *
@@ -163,29 +164,28 @@ public class LDA_CommandLine extends CommandLine {
             iterationDir = this.outDir;
         }
 
-        MultiThreadXML lda = new MultiThreadXML(iterationDir);
-        alpha = lda.getAlpha();
-        beta = lda.getBeta();
+        CompletedRunLDA runOfLDA = new CompletedRunLDA(iterationDir);
+        alpha = runOfLDA.getAlpha();
+        beta = runOfLDA.getBeta();
 
-        int nVocab = lda.getVocabSize();
-        int nTopics = lda.getTopicsSize();
+        int nVocab = runOfLDA.getVocabSize();
+        int nTopics = runOfLDA.getTopicsSize();
 
-        ZDirectory zDir = new ZDirectory(iterationDir, lda, nThreads);
+        ZDirectory zDir = new ZDirectory(iterationDir, runOfLDA, nThreads);
         zDir.setSkip(skip);
         PointEstimateDistribution estimator = null;
         if (dist.equalsIgnoreCase("kde")) {
-            estimator = new MarginalKDE(lda.getDocuments(), nVocab, nTopics, this.precision);
+            estimator = new MarginalKDE(runOfLDA.getDocuments(), nVocab, nTopics, this.precision);
         } else if (dist.equalsIgnoreCase("empiric")) {
 //            estimator = new MarginalEmpiric();
         } else if (dist.equalsIgnoreCase("topic")) {
-            estimator = new TopicHistogramEstimator(lda.getDocuments(), nVocab, nTopics);
+            estimator = new TopicHistogramEstimator(runOfLDA.getDocuments(), nVocab, nTopics);
         }
 
         zDir.addTo(estimator, skip);  // put the iterations into the point estimate distribution
-
         if (estimator != null) {
             if ((verbose & 1) != 0) {
-                estimator.statisticReport(iterationDir, statistic.toLowerCase(), skip, alpha, beta, lda.getTotalWords(), lda.docs, lda.getLastIteration(), nTopics, nVocab);
+                estimator.statisticReport(iterationDir, statistic.toLowerCase(), skip, alpha, beta, runOfLDA.getTotalWords(), runOfLDA.docs, runOfLDA.getLastIteration(), nTopics, nVocab);
             }
         }
 
@@ -546,7 +546,27 @@ public class LDA_CommandLine extends CommandLine {
         }
         return null;
     }
+    public String im(String s) {
+        return inputMM(s);
+    }
 
+    public String inputMM(String s) {
+        try {
+            BagOfWords b = new MatrixMarket(s,true);
+            int vocab = b.getVocabSize();
+            if (!bows.isEmpty()) {
+                if (vocab != bows.get(0).getVocabSize()) {
+                    return String.format("vocabularly size does not match other files, for file: %s", s);
+                }
+            }
+            this.bows.add(b);
+
+        } catch (Exception exc) {
+            return String.format("Error reading Matrix Market file: %s", exc.getMessage());
+        }
+        return null;
+    }
+    
     public String s(String s) {
         return seed(s);
     }
@@ -694,7 +714,6 @@ public class LDA_CommandLine extends CommandLine {
 
         System.out.println("\nProcessing Directives:");
         System.out.println("\t-lda  \n\t\tlda iterations");
-        System.out.println("\t-maxLike  \n\t\treport the iteration with the maximum likelihood");
         System.out.println("\t-pe  \n\t\tpoint estimate from lda iterations");
         System.out.println("\t-chib  \n\t\tchib estimation");
         System.out.println("\t-part  \n\t\tpartition validation, partitions BOW file and writes commands to stdout");
@@ -704,9 +723,12 @@ public class LDA_CommandLine extends CommandLine {
         System.out.println("\t-af, -alphaFile (path)\n\t\tfile of vector base measure priors for document distributions, no default");
         System.out.println("\t-b, -beta (float)\n\t\tDirichlet concentration parameter for topic distribution, default=0.1");
         System.out.println("\t-bf, -betaFile (path)\n\t\tfile of vector base measure priors for topic distributions, no default");
+        System.out.println("\t-bi,  binarize the input word counts, default = false");
         System.out.println("\t-ch, -cache (integer)\n\t\tOutput cache size, if cache size = 0 then compute point estimates during lda, default=10");
         System.out.println("\t-ib, -inputBOW (path)\n\t\tinput bag of words file, no default");
+        System.out.println("\t-im, -inputMM (path)\n\t\tinput matrix market file, no default");        
         System.out.println("\t-li, -ldaIterations (integer)\n\t\tnumer of lda iterations, default=1000");
+        System.out.println("\t-maxLike  \n\t\treport the iteration with the maximum likelihood");        
         System.out.println("\t-o, -out (path)\n\t\tmain output directory for LDA iterations, no default");
         System.out.println("\t-t, -topic (integer)\n\t\tnumber of topics,  no default");
         System.out.println("\t-tn, -thinning (integer)\n\t\titeration interval between saves, default=1");

@@ -109,4 +109,5 @@ public class TopicHistogramEstimator extends PointEstimatorDistBase {
         }
         return modes;
     }
+
 }

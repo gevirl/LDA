@@ -16,5 +16,5 @@ public interface PointEstimateDistribution {
     public void statisticReport(File dir, String statistic, int skip,double alpha,double beta,long totalWords,int[][] docs,int lastIter,int nTopics,int nVocab) throws Exception ;
     public String getLabel();
     public void add(Object obj);
-    public void add(int[][][] z);
+//    public void add(int[][][] z);
 }

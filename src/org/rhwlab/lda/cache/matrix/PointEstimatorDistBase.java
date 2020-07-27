@@ -7,8 +7,8 @@ package org.rhwlab.lda.cache.matrix;
 
 import java.io.File;
 import java.io.PrintStream;
+import org.rhwlab.lda.NormalizeUtil;
 import org.rhwlab.lda.cache.PointEstimates;
-
 
 /**
  *
@@ -27,7 +27,7 @@ abstract public class PointEstimatorDistBase implements PointEstimateDistributio
     }
 
     public void add(int[][][] z) {
-        for (int i=0 ; i<z.length ; ++i){
+        for (int i = 0; i < z.length; ++i) {
             add(z[i]);
         }
     }
@@ -41,6 +41,10 @@ abstract public class PointEstimatorDistBase implements PointEstimateDistributio
         printMatrix(stream, est.docEst);
         stream.close();
 
+        stream = new PrintStream(new File(dir, String.format("%s_%s.docTopicNorm", getLabel(), statistic)));
+        printMatrix(stream, NormalizeUtil.normRows(est.docEst));
+        stream.close();
+
         System.out.println("Reporting the theta array - document/topic distributions");
         stream = new PrintStream(new File(dir, String.format("%s_%s.theta", getLabel(), statistic)));
         double[][] theta = Likelihood.theta(est.docEst, alpha);
@@ -50,6 +54,10 @@ abstract public class PointEstimatorDistBase implements PointEstimateDistributio
         System.out.println("Reporting the word/topic counts");
         stream = new PrintStream(new File(dir, String.format("%s_%s.wordTopic", getLabel(), statistic)));
         printMatrix(stream, est.wordEst);
+        stream.close();
+
+        stream = new PrintStream(new File(dir, String.format("%s_%s.wordTopicNorm", getLabel(), statistic)));
+        printMatrix(stream, NormalizeUtil.normRows(est.wordEst));
         stream.close();
 
         System.out.println("Reporting the phi array - topic/word distributions");

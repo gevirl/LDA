@@ -7,10 +7,13 @@ package org.rhwlab.lda.cache;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 
 /**
@@ -21,11 +24,21 @@ public class WorkerZIterationFile implements Callable<int[][][]> {
 
     File file;
     int skip = 0;  // number of iterations to ignore at the begining of the list
+    int worker;
+    int lastIter;
+    
 
     public WorkerZIterationFile(File file) {
         this.file = file;
+        parseFileName();
     }
 
+    public void saveZList(ArrayList<int[][]> zlist,File f)throws Exception {
+        
+        ObjectOutputStream stream = new ObjectOutputStream(new GZIPOutputStream(new FileOutputStream(f)));
+        stream.writeObject(zlist);
+        stream.close();        
+    }
     // reads the single worker iteration file and form the z array for each iteration
     @Override
     public int[][][] call() throws Exception {
@@ -43,83 +56,36 @@ public class WorkerZIterationFile implements Callable<int[][][]> {
     
     // read all the topic choice iterations
     public ArrayList<int[][]> readZlist() throws Exception {
- //       System.out.printf("Reading file: %s\n", file.getPath());
+        System.out.printf("Reading file: %s\n", file.getPath());
         ObjectInputStream stream = new ObjectInputStream(new GZIPInputStream(new FileInputStream(file)));
         ArrayList<int[][]> zList = (ArrayList<int[][]>) stream.readObject();
         stream.close();
+        System.out.printf("Closingfile: %s\n", file.getPath());
         return zList;
     }
-/*
-    // form histogram of topics for each document/word for the iterations in this file, 
-    // skip initial iterations to implement burnin if skip >0
-    // returns iteration counts for doc,word,topic
-    public int[][][] topicHistogram() throws Exception {
-        List zList = readZlist();
-        int[][] z = (int[][]) zList.get(0);
-        int nTopics = worker.getTopicCount();
 
-        int[][][] ret = new int[worker.getDocumentsSize()][][];  // doc,word,topic -> count       
-        for (int d = 0; d < z.length; ++d) {
-            ret[d] = new int[z[d].length][nTopics];
-        }
-
-        for (int iter = skip; iter < zList.size(); ++iter) {
-            z = (int[][]) zList.get(iter);
-            for (int d = 0; d < z.length; ++d) {
-                for (int w = 0; w < z[d].length; ++w) {
-                    ++ret[d][w][z[d][w]];
-                }
-            }
-        }
-        return ret;
-    }
-
-    // create kdes for each document,topic
-    // initialize the kde with this file's iteration marginals
-    public KernelEstimator[][] docTopicKDE(double precision) throws Exception {
-        int nTopics = worker.getTopicCount();
-        int nDocs = worker.getDocumentsSize();
-        KernelEstimator[][] kde = new KernelEstimator[nDocs][nTopics];
-        for (int d = 0; d < nDocs; ++d) {
-            for (int t = 0; t < nTopics; ++t) {
-                kde[d][t] = new KernelEstimator(precision);
-            }
-        }
-        docTopicInto(kde);
-        return kde;
-    }
-    public void docTopicInto(IntegerHistogram[][] iHist) throws Exception {
-        int nTopics = iHist[0].length;
-        List zList = readZlist();
-
-        for (int iter = skip; iter < zList.size(); ++iter) {
-            int[][] nd = DocTopicCounts.docTopicCounts((int[][]) zList.get(iter), nTopics);
-            for (int d = 0; d < nd.length; ++d) {
-                for (int t = 0; t < nTopics; ++t) {
-                    iHist[d][t].addValue(nd[d][t]);
-                }
-            }
-        }
-    }
-    // add the iteration marginals for this file to an existing document,topic kde
-    public void docTopicInto(KernelEstimator[][] kde) throws Exception {
-        int nTopics = kde[0].length;
-        List zList = readZlist();
-
-        for (int iter = skip; iter < zList.size(); ++iter) {
-            int[][] nd = DocTopicCounts.docTopicCounts((int[][]) zList.get(iter), nTopics);
-            for (int d = 0; d < nd.length; ++d) {
-                for (int t = 0; t < nTopics; ++t) {
-                    kde[d][t].addValue(nd[d][t], 1.0);
-                }
-            }
-        }
-    }
-*/
 
 
     public void resetSkip(int sk) {
         this.skip = sk;
     }
-
+    
+    final public void parseFileName(){
+        lastIter = Integer.parseInt(file.getName().substring(4, 10));
+        worker = Integer.parseInt(file.getName().substring(16, file.getName().lastIndexOf(".")));
+        
+    }
+    
+   
+    static public void main(String[] args)throws Exception {
+        File dir = new File("/net/waterston/vol9/flyATAC/all.peak_matrix_out_save1/S1_UW_6-10.peak_matrix.mtx.gz_topics60_alpha3.000_beta2000.000");
+        for (File file : dir.listFiles()){
+            if (file.getName().endsWith(".Z")){
+                System.out.printf("File: %s\n", file.getName());
+                WorkerZIterationFile iterFile = new WorkerZIterationFile(file);
+                int[][][] z = iterFile.call();
+                int woiefhsiah=0;
+            }
+        }
+    }
 }

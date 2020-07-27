@@ -32,6 +32,7 @@ public class MultiThreadXML extends MultiThreadXMLBase {
             workerXMLs[w] = new WorkerXML(this.workerXMLFiles[w]);
             threadCollection.add(workerXMLs[w]);
         }
+        // this reads all the worker xml files
         ExecutorService service = Executors.newWorkStealingPool();
         List<Future<Object>> futures = service.invokeAll(threadCollection);
         for (Future<Object> future : futures) {
@@ -51,7 +52,11 @@ public class MultiThreadXML extends MultiThreadXMLBase {
     
     static int[][] getDocuments(WorkerXML[] workerXMLs){
         int n = workerXMLs.length;
-        int[][] docs = new int[n][];
+        int i = 0;
+        for (WorkerXML worker : workerXMLs){
+            i = i+ worker.getDocumentsSize();
+        }
+        int[][] docs = new int[i][];
         int r = 0;
         for (int w = 0; w < n; ++w) {
             int[][] nd = workerXMLs[w].getDocuments();

@@ -214,7 +214,7 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
             accumCounts();
 
             if (peDist != null && i >= burnIn * thinning && i % thinning == 0) {
-                peDist.add(this);
+                peDist.add(this.getZ());
             }
             if (maxLike){
                 int[][] nd = this.getDocumentTopicCounts();

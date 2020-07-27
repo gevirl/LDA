@@ -173,6 +173,13 @@ public class WorkerXML implements Callable {
     public int[] getWordCounts() {
         return this.nwsum;
     }    
+    
+    public List<Integer> getIterationSizes(){
+        return this.iterFileSizes;
+    }
+    public List<File> getIterationFiles(){
+        return this.iterationFiles;
+    }
 int iuhsdifuhs=0;
 
 }

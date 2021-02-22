@@ -85,6 +85,7 @@ public class WorkerLDA extends WorkerXML implements Callable {
     public Object call() throws Exception {
         ++iter;
         for (int m = 0; m < z.length; m++) {
+
             for (int n = 0; n < z[m].length; n++) {
 
                 int topic = sampleFullConditional(m, n);
@@ -134,8 +135,8 @@ public class WorkerLDA extends WorkerXML implements Callable {
         double[] p = new double[K];
         for (int k = 0; k < K; k++) {
             int w = documents[m][n];
-            p[k] = (nwGlobal[w][k] + beta.getValue(k,w)) / (nwsumGlobal[k] + beta.getSum(k))
-                    * (nd[m][k] + alpha.getValue(m,k)) / (ndsum[m] + alpha.getSum(m));
+            p[k] = (nwGlobal[w][k] + beta.getValue(k, w)) / (nwsumGlobal[k] + beta.getSum(k))
+                    * (nd[m][k] + alpha.getValue(m, k)) / (ndsum[m] + alpha.getSum(m));
         }
         // cumulate multinomial parameters
         for (int k = 1; k < p.length; k++) {

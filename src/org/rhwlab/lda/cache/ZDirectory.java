@@ -5,6 +5,8 @@
  */
 package org.rhwlab.lda.cache;
 
+import org.rhwlab.lda.cache.matrix.WorkerZIterationFile;
+import org.rhwlab.lda.cache.matrix.ZIterationFiles;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.PrintStream;

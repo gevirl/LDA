@@ -14,6 +14,7 @@ import java.util.Random;
 import java.util.concurrent.Callable;
 import org.apache.commons.math3.special.Gamma;
 import org.rhwlab.lda.BagOfWords;
+import org.rhwlab.lda.OriginalBOW;
 import org.rhwlab.lda.Utils;
 //import org.rhwlab.sparcematrix.DbSparceMatrix;
 
@@ -398,7 +399,7 @@ public class ChibEstimator implements Callable {
 
         double alpha = Double.valueOf(args[1]);
 
-        int[][] docs = new BagOfWords(args[2]).toDocumentFormat();
+        int[][] docs = new OriginalBOW(args[2],false).toDocumentFormat();
 
         long seed = Long.valueOf(args[3]);
 

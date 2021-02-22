@@ -20,8 +20,6 @@ import java.util.concurrent.Future;
 import org.rhwlab.lda.cache.DocumentTopicCounts;
 import org.rhwlab.lda.cache.TextCounts;
 import org.rhwlab.lda.cache.WordTopicCounts;
-import org.rhwlab.lda.cache.WorkerZIterationFile;
-import org.rhwlab.lda.cache.ZIterationFiles;
 
 /**
  *
@@ -34,8 +32,8 @@ public class ZDirectory {
 
     TreeMap<Integer, TreeMap<Integer, WorkerZIterationFile>> iterWorkMap = new TreeMap<>(); // iter,worker -> file
     TreeMap<Integer, TreeMap<Integer, WorkerZIterationFile>> workIterMap = new TreeMap<>();  // worker,iter -> file
-    TreeMap<Integer,Integer> countMap = new TreeMap<>(); // iter -> record count
-    
+    //   TreeMap<Integer,Integer> countMap = new TreeMap<>(); // iter -> record count
+
     int nTopics;
 //    int nWorkers;
     int nDocs;
@@ -62,15 +60,14 @@ public class ZDirectory {
         }
 
         // organize the z iteration files
-
         for (File file : dir.listFiles()) {
             String name = file.getName();
             if (name.startsWith("Iter")) {
                 int iter = Integer.valueOf(name.substring(4, 10));
                 int w = Integer.valueOf(name.substring(16, name.indexOf(".Z")));
- //               int recCount  = workers[w].getRecordCount(file);   // number of iteration in the file
-                int recCount = lda.getRecordCount(file.getPath());
-                countMap.put(iter, recCount);
+                //               int recCount  = workers[w].getRecordCount(file);   // number of iteration in the file
+                //               int recCount = lda.getRecordCount(file.getPath());
+                //               countMap.put(iter, recCount);
                 WorkerZIterationFile zFile = new WorkerZIterationFile(file);
 
                 TreeMap<Integer, WorkerZIterationFile> workMap = iterWorkMap.get(iter);
@@ -88,52 +85,63 @@ public class ZDirectory {
                 iterMap.put(iter, zFile);
             }
         }
+        int iushfius = 0;
     }
 
+    public TreeMap<Integer, WorkerZIterationFile> getWorkerFiles(int worker) {
+        return this.workIterMap.get(worker);
+    }
+
+    public CompletedRunLDA getCompletedRun(){
+        return this.lda;
+    }
     // put all the iterations for all the workers into the distribution
-    public void addTo(PointEstimateDistribution dist,int skip) throws Exception {
+    public void addTo(PointEstimateDistribution dist, int skip) throws Exception {
         System.out.println("Starting addTo dist");
         int toSkip = skip;
         Collection<Callable<PointEstimateDistribution>> threadCollection = new ArrayList<>();
-        
+
         for (Integer iter : iterWorkMap.keySet()) {
             TreeMap<Integer, WorkerZIterationFile> workMap = iterWorkMap.get(iter);
-            int recCount = countMap.get(iter);
-            if (recCount <= toSkip){
+            //           int recCount = countMap.get(iter);
+            int recCount = lda.getCacheSize();
+            if (recCount <= toSkip) {
                 // skip the entire set of files
                 toSkip = toSkip - recCount;
-                
-            }else {
-                ZIterationFiles zFiles = new ZIterationFiles(workMap.values(),toSkip,lda.getDocumentsSize());
+
+            } else {
+                ZIterationFiles zFiles = new ZIterationFiles(workMap.values(), toSkip, lda.getDocumentsSize());
                 int[][][] z = zFiles.readFiles();
-                dist.add(z);
+                for (int i = 0; i < z.length; ++i) {
+                    dist.add(z[i]);
+                }
 
             }
         }
 
         System.out.println("Ending addTo");
     }
- 
+
     public void iterationsReport(PrintStream likeStream, File outDir) throws Exception {
         System.out.println("Starting Iterations Report");
         int[][] docs = lda.getDocuments();
 
         int likeIter = 0;
         for (Integer iter : iterWorkMap.keySet()) {
-            System.out.printf("Starting report for iteration : %d\n",iter);
+            System.out.printf("Starting report for iteration : %d\n", iter);
             TreeMap<Integer, WorkerZIterationFile> workMap = iterWorkMap.get(iter);
-            ZIterationFiles iterFiles = new ZIterationFiles(workMap.values(), 0,docs.length);
+            ZIterationFiles iterFiles = new ZIterationFiles(workMap.values(), 0, docs.length);
             int[][][] z = iterFiles.readFiles();
-            
+
             int[][][] nw = new int[z.length][][];
-            for (int i=0 ; i<z.length ; ++i){
-                nw[i] = WordTopicCounts.wordTopicCounts(z[i],lda.getVocabSize(), lda.getTopicsSize(), docs);
+            for (int i = 0; i < z.length; ++i) {
+                nw[i] = WordTopicCounts.wordTopicCounts(z[i], lda.getVocabSize(), lda.getTopicsSize(), docs);
             }
             int[][][] nd = new int[z.length][][];
-            for (int i=0 ; i<z.length ; ++i){
-                nd[i] = DocumentTopicCounts.documentTopicCounts(z[i],lda.getTopicsSize());
+            for (int i = 0; i < z.length; ++i) {
+                nd[i] = DocumentTopicCounts.documentTopicCounts(z[i], lda.getTopicsSize());
             }
-            
+
             System.out.printf("Counts completed for iteration %d\n", iter);
             if (likeStream != null) {
                 Collection<Callable<Double>> threadCollection = new ArrayList<>();
@@ -150,12 +158,13 @@ public class ZDirectory {
                 }
             }
             if (outDir != null) {
-                toDocTextCounts(nd, outDir,parallelism);
-                toWordTextCounts(nw, outDir,parallelism);
+                toDocTextCounts(nd, outDir, parallelism);
+                toWordTextCounts(nw, outDir, parallelism);
             }
         }
-    } 
-    public void toDocTextCounts(int[][][] nd, File outDir,int parallelism) throws Exception {
+    }
+
+    public void toDocTextCounts(int[][][] nd, File outDir, int parallelism) throws Exception {
         Collection<Callable<Object>> threadCollection = new ArrayList<>();
         ExecutorService service = Executors.newWorkStealingPool(parallelism);
 
@@ -163,7 +172,7 @@ public class ZDirectory {
         for (int t = 0; t < nTopics; ++t) {
             String label = String.format("Topic%03dDoc.csv", t);
             stream[t] = new PrintStream(new FileOutputStream(new File(outDir, label), true));
-            threadCollection.add(new TextCounts(stream[t], nd, t,label));
+            threadCollection.add(new TextCounts(stream[t], nd, t, label));
         }
         service.invokeAll(threadCollection);
         for (int t = 0; t < nTopics; ++t) {
@@ -171,7 +180,7 @@ public class ZDirectory {
         }
     }
 
-    public void toWordTextCounts(int[][][] nw, File outDir,int parallelism) throws Exception {
+    public void toWordTextCounts(int[][][] nw, File outDir, int parallelism) throws Exception {
         Collection<Callable<Object>> threadCollection = new ArrayList<>();
         ExecutorService service = Executors.newWorkStealingPool(parallelism);
 
@@ -179,14 +188,14 @@ public class ZDirectory {
         for (int t = 0; t < nTopics; ++t) {
             String label = String.format("Topic%03dWord.csv", t);
             stream[t] = new PrintStream(new FileOutputStream(new File(outDir, label), true));
-            threadCollection.add(new TextCounts(stream[t], nw, t,label));
+            threadCollection.add(new TextCounts(stream[t], nw, t, label));
         }
 
         service.invokeAll(threadCollection);
         for (int t = 0; t < nTopics; ++t) {
             stream[t].close();
         }
-    }    
+    }
 
     public void setSkip(int skip) {
         int cs = lda.getCacheSize();
@@ -208,14 +217,14 @@ public class ZDirectory {
         }
 
     }
-/*
+
+    /*
     public MultiThreadXML getLDA() {
         return this.lda;
     }
-*/
+     */
     public int lastIteration() {
         return this.iterWorkMap.lastKey();
     }
-
 
 }

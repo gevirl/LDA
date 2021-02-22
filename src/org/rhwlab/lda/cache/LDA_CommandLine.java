@@ -25,7 +25,7 @@ import java.util.concurrent.Future;
 import org.rhwlab.command.CommandLine;
 import org.rhwlab.lda.BagOfWords;
 import org.rhwlab.lda.JarFile;
-import org.rhwlab.lda.ChibEstimator;
+import org.rhwlab.lda.OriginalBOW;
 
 /**
  *
@@ -80,7 +80,7 @@ public class LDA_CommandLine extends CommandLine {
         ArrayList<String> options = new ArrayList<>();
         BagOfWords[] bowArray = new BagOfWords[bowFiles.length];
         for (int i = 0; i < bowFiles.length; ++i) {
-            bowArray[i] = new BagOfWords(bowFiles[i]);
+            bowArray[i] = new OriginalBOW(bowFiles[i],false);
         }
 
         for (int p = 0; p < nPart; ++p) {
@@ -226,7 +226,7 @@ public class LDA_CommandLine extends CommandLine {
         MultiThreadXML xml = new MultiThreadXML(dir);
 
         // get the documents to validate
-        int[][] docs = new BagOfWords(chibBOW).toDocumentFormat();
+        int[][] docs = new OriginalBOW(chibBOW,false).toDocumentFormat();
 
         Collection<Callable<Object>> workers = new ArrayList<>();
         ChibEstimator[] estimators = new ChibEstimator[nThreads];
@@ -486,7 +486,7 @@ public class LDA_CommandLine extends CommandLine {
 
     public String inputBOW(String s) {
         try {
-            BagOfWords b = new BagOfWords(s);
+            BagOfWords b = new OriginalBOW(s,false);
             int vocab = b.getVocabSize();
             if (!bows.isEmpty()) {
                 if (vocab != bows.get(0).getVocabSize()) {
@@ -650,8 +650,8 @@ public class LDA_CommandLine extends CommandLine {
         System.out.println("\t-part  \n\t\tpartition validation, partitions BOW file and writes commands to stdout");
 
         System.out.println("\nLDA Options:");
-        System.out.println("\t-a, -alpha (float)\n\t\t symmetric Dirichlet parameter for topic distribution, default=0.1");
-        System.out.println("\t-b, -beta (float)\n\t\tsymmetric Dirichlet parameter for document distribution, default=0.1");
+        System.out.println("\t-a, -alpha (float)\n\t\t symmetric Dirichlet parameter for document distribution, default=0.1");
+        System.out.println("\t-b, -beta (float)\n\t\tsymmetric Dirichlet parameter for topic distribution, default=0.1");
         System.out.println("\t-ch, -cache (integer)\n\t\tOutput cache size, if cache size = 0 then compute point estimates during lda, default=10");
         System.out.println("\t-ib, -inputBOW (path)\n\t\tinput bag of words file, no default");
         System.out.println("\t-li, -ldaIterations (integer)\n\t\tnumer of lda iterations, default=1000");

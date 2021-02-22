@@ -6,16 +6,20 @@
 package org.rhwlab.lda.cache.matrix;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 import org.jdom2.Document;
 import org.jdom2.Element;
 import org.jdom2.input.SAXBuilder;
+import org.rhwlab.lda.BagOfWords;
+import org.rhwlab.lda.BagOfWordsList;
 
 /**
  *
  * @author gevirl
  */
 public class MultiThreadXMLBase {
+    BagOfWordsList bowList;
     int[][] docs;
     int V;  // vocab size
     int K;  // number of topics
@@ -31,7 +35,8 @@ public class MultiThreadXMLBase {
     int nWorkers;
     File[] workerXMLFiles;
     
-    public MultiThreadXMLBase(int nWorkers){
+    public MultiThreadXMLBase(int nWorkers,BagOfWordsList bows){
+        this.bowList = bows;
         this.nWorkers = nWorkers;
         workerXMLFiles = new File[nWorkers];
     }
@@ -50,6 +55,13 @@ public class MultiThreadXMLBase {
         nWorkers = Integer.valueOf(root.getAttributeValue("nWorkers"));
         totalWords = Long.valueOf(root.getAttributeValue("totalWords"));
         iterationOffset = Integer.valueOf(root.getAttributeValue("lastIteration"));
+        
+        List<Element> bowEles = root.getChildren("BagOfWords");
+        List<BagOfWords> list = new ArrayList<>();
+        for (int i=0 ; i<bowEles.size() ; ++i){
+            list.add(BagOfWords.factory(bowEles.get(i)));
+        }
+        bowList = new BagOfWordsList(list);
         
         List<Element> workerEles = root.getChildren("WorkerLDA");
         workerXMLFiles = new File[nWorkers];
@@ -79,6 +91,9 @@ public class MultiThreadXMLBase {
             workerEle.setAttribute("file", workerXMLFiles[i].getName());
             ele.addContent(workerEle);
         } 
+        for (BagOfWords bow : bowList.getList()){
+            ele.addContent(bow.toXML());
+        }
         ele.addContent(alpha.toXML("Alpha"));
         ele.addContent(beta.toXML("Beta"));        
         return ele;

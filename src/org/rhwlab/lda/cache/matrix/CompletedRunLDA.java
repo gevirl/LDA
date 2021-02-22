@@ -8,6 +8,7 @@ package org.rhwlab.lda.cache.matrix;
 import java.io.File;
 import java.util.List;
 import java.util.TreeMap;
+import org.rhwlab.lda.BagOfWords;
 
 /**
  *
@@ -16,10 +17,12 @@ import java.util.TreeMap;
 public class CompletedRunLDA extends MultiThreadXMLBase {
 
     int[][] docs = null;
-    TreeMap<String, Integer> iterMap = new TreeMap<>();
+//    TreeMap<String, Integer> iterMap = new TreeMap<>();
 
     public CompletedRunLDA(File dir) throws Exception {
         super(dir);
+        docs = bowList.toDocumentFormat();
+/*        
         docs = new int[this.D][];
         int index = 0;
         for (File workerXMLfile : this.workerXMLFiles) {
@@ -36,13 +39,15 @@ public class CompletedRunLDA extends MultiThreadXMLBase {
                 ++index;
             }
         }
+*/
     }
 
     public int[][] getDocuments() throws Exception {
-
         return docs;
     }
+/*    
     public Integer getRecordCount(String filePath){
         return iterMap.get(filePath);
     }
+*/
 }

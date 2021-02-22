@@ -334,6 +334,7 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
     // args[4] - bow file
     // args[5] - random seed
     // args[6] = beta
+/*    
     public static void main(String[] args) throws Exception {
 
         long seed = 900;
@@ -368,4 +369,5 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
 
         int asdohsdi = 0;
     }
+*/
 }

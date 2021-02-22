@@ -24,8 +24,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.rhwlab.command.CommandLine;
 import org.rhwlab.lda.BagOfWords;
+import org.rhwlab.lda.BagOfWordsList;
 import org.rhwlab.lda.JarFile;
 import org.rhwlab.lda.MatrixMarket;
+import org.rhwlab.lda.OriginalBOW;
 
 /**
  *
@@ -34,7 +36,10 @@ import org.rhwlab.lda.MatrixMarket;
 public class LDA_CommandLine extends CommandLine {
 
     // general options
-    ArrayList<BagOfWords> bows = new ArrayList<>();
+//    ArrayList<BagOfWords> bows = new ArrayList<>();
+    ArrayList<File> bowFiles = new ArrayList<>();
+    String bowClass = null;
+    boolean binarize = false;
 
     String rid = null;
     int nThreads = 1;
@@ -47,9 +52,11 @@ public class LDA_CommandLine extends CommandLine {
     boolean chibProcessing = false;
     boolean pointEstimateProcessing = false;
     boolean maxLikeProcessing = false;
+    boolean docTopicProcessing = false;
 
     // chib options
     File phiFile;
+    double[][] phi;
     int chibIter = 1000;
     int chibBurnin = 200;
     File chibBOW;
@@ -64,9 +71,11 @@ public class LDA_CommandLine extends CommandLine {
     File betaFile = null;
     int cacheSize = 10;
     File outDir;
+    File outFile;
     int ldaIter = 1000;
-    //   int ldaBurn = 0;
+    boolean saveXML = true;
 
+    //   int ldaBurn = 0;
     // point estimator options
     int skip = 0;
     double precision = 1;
@@ -79,13 +88,18 @@ public class LDA_CommandLine extends CommandLine {
     Integer nPart = null;
 
     Random rnd;
-    static String prog = "org.rhwlab.lda.cache.LDA_CommandLine";
+    static String prog = "org.rhwlab.lda.cache.matrix.LDA_CommandLine";
 
     private ArrayList<String> partitionOptions(File[] bowFiles, String runID) throws Exception {
         ArrayList<String> options = new ArrayList<>();
         BagOfWords[] bowArray = new BagOfWords[bowFiles.length];
         for (int i = 0; i < bowFiles.length; ++i) {
-            bowArray[i] = new BagOfWords(bowFiles[i]);
+            if (this.bowClass.contains("MatrixMarket")) {
+                bowArray[i] = new MatrixMarket(bowFiles[i], binarize);
+            } else if (this.bowClass.contains("OriginalBOW")) {
+                bowArray[i] = new OriginalBOW(bowFiles[i], binarize);
+            }
+
         }
 
         for (int p = 0; p < nPart; ++p) {
@@ -110,7 +124,7 @@ public class LDA_CommandLine extends CommandLine {
 
     private void outputPartitionCommands(PrintStream stream, File[] bowFiles, String runID) throws Exception {
         for (String options : partitionOptions(bowFiles, runID)) {
-            stream.printf("java -cp %s %s ", JarFile.getJar(), prog);
+            stream.printf("java -Xms96G -cp %s %s ", JarFile.getJar(), prog);
             stream.print(options);
             stream.println();
         }
@@ -143,10 +157,23 @@ public class LDA_CommandLine extends CommandLine {
     private String LDAOptions(ArrayList<BagOfWords> bowList, File dir, String runID) {
         StringBuilder builder = new StringBuilder();
         builder.append("-lda ");
-        builder.append(String.format("-a %f ", alpha.getConcentration()));
-        builder.append(String.format("-b %f ", beta.getConcentration()));
-        for (BagOfWords bow : bowList) {
-            builder.append(String.format("-ib %s ", bow.getFile().getPath()));
+        builder.append(String.format("-a %f ", this.alphaConc));
+        builder.append(String.format("-b %f ", this.betaConc));
+        if (this.bowClass.contains("MatrixMarket")) {
+            for (BagOfWords bow : bowList) {
+                builder.append(String.format("-im %s ", bow.getFile().getPath()));
+            }
+        }
+        if (this.bowClass.contains("OriginalBOW")) {
+            for (BagOfWords bow : bowList) {
+                builder.append(String.format("-ib %s ", bow.getFile().getPath()));
+            }
+        }
+        if (this.binarize) {
+            builder.append("-binarize ");
+        }
+        if (!saveXML) {
+            builder.append("-nosave ");
         }
         builder.append(String.format("-li %d ", this.ldaIter));
         builder.append(String.format("-o %s ", dir.getPath()));
@@ -172,17 +199,20 @@ public class LDA_CommandLine extends CommandLine {
         int nTopics = runOfLDA.getTopicsSize();
 
         ZDirectory zDir = new ZDirectory(iterationDir, runOfLDA, nThreads);
-        zDir.setSkip(skip);
+        //       zDir.setSkip(skip);
         PointEstimateDistribution estimator = null;
         if (dist.equalsIgnoreCase("kde")) {
             estimator = new MarginalKDE(runOfLDA.getDocuments(), nVocab, nTopics, this.precision);
+            zDir.addTo(estimator, skip);
         } else if (dist.equalsIgnoreCase("empiric")) {
 //            estimator = new MarginalEmpiric();
         } else if (dist.equalsIgnoreCase("topic")) {
-            estimator = new TopicHistogramEstimator(runOfLDA.getDocuments(), nVocab, nTopics);
+            //           estimator = new TopicHistogramEstimator(runOfLDA.getDocuments(), nVocab, nTopics);
+            estimator = new TopicHistogramEstimator(zDir, skip);
         }
 
-        zDir.addTo(estimator, skip);  // put the iterations into the point estimate distribution
+//        System.out.println("Starting to add to estimator");
+        //       zDir.addTo(estimator, skip);  // put the iterations into the point estimate distribution
         if (estimator != null) {
             if ((verbose & 1) != 0) {
                 estimator.statisticReport(iterationDir, statistic.toLowerCase(), skip, alpha, beta, runOfLDA.getTotalWords(), runOfLDA.docs, runOfLDA.getLastIteration(), nTopics, nVocab);
@@ -205,27 +235,14 @@ public class LDA_CommandLine extends CommandLine {
 
     // run the chib estimator
     private void runChib() throws Exception {
-        // read the phi file
-        ArrayList<double[]> phiList = new ArrayList<>();
-        BufferedReader reader = new BufferedReader(new FileReader(phiFile));
-        String line = reader.readLine();
-        while (line != null) {
-            String[] tokens = line.split(",");
-            double[] topicPhi = new double[tokens.length];
-            for (int i = 0; i < topicPhi.length; ++i) {
-                topicPhi[i] = Double.valueOf(tokens[i]);
-            }
-            phiList.add(topicPhi);
-            line = reader.readLine();
-        }
-        reader.close();
-        double[][] phi = new double[phiList.size()][];
-        for (int i = 0; i < phi.length; ++i) {
-            phi[i] = phiList.get(i);
-        }
 
         // get the documents to validate
-        int[][] docs = new BagOfWords(chibBOW).toDocumentFormat();
+        int[][] docs = null;
+        if (this.bowClass.contains("MatrixMarket")) {
+            docs = new MatrixMarket(chibBOW, this.binarize).toDocumentFormat();
+        } else if (this.bowClass.contains("OriginalBOW")) {
+            docs = new OriginalBOW(chibBOW, this.binarize).toDocumentFormat();
+        }
 
         Collection<Callable<Object>> workers = new ArrayList<>();
         ChibEstimator[] estimators = new ChibEstimator[nThreads];
@@ -242,7 +259,9 @@ public class LDA_CommandLine extends CommandLine {
             workers.clear();
             int nW = Math.min(nThreads, docs.length - start);
             for (int t = 0; t < nW; ++t) {
-                System.out.printf("Chib on document %d\n", start + t);
+                if (t % 100 == 0) {
+                    System.out.printf("Chib on document %d\n", start + t);
+                }
                 estimators[t].setDocument(docs[start + t]);
                 workers.add(estimators[t]);
             }
@@ -261,7 +280,7 @@ public class LDA_CommandLine extends CommandLine {
     private File iterationDirectory(File baseDir) {
         String rName;
         if (rid == null) {
-            rName = runName(bows.get(0).getFile().getName().replace(".bow", ""));
+            rName = runName(bowFiles.get(0).getName().replace(".bow", ""));
         } else {
             rName = runName(rid);
         }
@@ -272,8 +291,46 @@ public class LDA_CommandLine extends CommandLine {
         return String.format("%s_topics%d_alpha%.3f_beta%.3f", baseName, topics, this.alphaConc, this.betaConc);
     }
 
+    private void runDocTopics() throws Exception {
+        int[][] docs = BagOfWordsList.factory(bowFiles, bowClass, binarize).toDocumentFormat();
+        
+        Collection<Callable<Object>> workers = new ArrayList<>();
+        DocumentTopicDistribution[] docTopicDists = new DocumentTopicDistribution[nThreads];
+        for (int i = 0; i < nThreads; ++i) {
+            docTopicDists[i] = new DocumentTopicDistribution(phi, alphaConc, seed + i,this.ldaIter);
+        }     
+        
+        PrintStream stream = new PrintStream(outFile);
+        ExecutorService service = Executors.newWorkStealingPool(nThreads);
+        int start = 0;
+        while (start < docs.length) {
+            workers.clear();
+            int nW = Math.min(nThreads, docs.length - start);
+            for (int t = 0; t < nW; ++t) {
+                if (t % 100 == 0) {
+                    System.out.printf("DocTopic Distribution on document %d\n", start + t);
+                }
+                docTopicDists[t].setDocument(docs[start + t]);
+                workers.add(docTopicDists[t]);
+            }
+            List<Future<Object>> futures = service.invokeAll(workers);
+            for (int t = 0; t < nW; ++t) {
+                Future future = futures.get(t);
+                double[] theta = (double[]) future.get();
+                stream.printf("%f", theta[0]);
+                for (int i=1 ; i<theta.length ; ++i){
+                    stream.printf(",%f", theta[i]);
+                }
+                stream.println();
+
+            }
+            start = start + nW;
+        }
+        stream.close();        
+    }
+
     // run the lda model on the input bow files and parameters for given number of topics
-    private String runLDA() throws Exception  {
+    private String runLDA() throws Exception {
 
         iterationDir = iterationDirectory(this.outDir);  // output iterations directory
         Files.createDirectories(iterationDir.toPath());
@@ -283,25 +340,30 @@ public class LDA_CommandLine extends CommandLine {
         if (xml.exists()) {
             lda = new MultiThreadLDA(iterationDir);  // adding iterations to exiting lda run
         } else {
-            int[][] docs = BagOfWords.toDocumentFormat(bows.toArray(new BagOfWords[0]));
-            int vocab = bows.get(0).getVocabSize();
+            BagOfWordsList bowList = BagOfWordsList.factory(bowFiles, bowClass, binarize);
+            int[][] docs = bowList.toDocumentFormat();
+            int vocab = bowList.getVocabN();
             // set up the hyperparameter martrices
             if (alphaFile != null) {
-                alpha = new RowSumFileMatrix(alphaConc,docs.length,this.topics,this.alphaFile);
-                String s = ((RowSumFileMatrix)alpha).build();
-                if (s != null) return s;
+                alpha = new RowSumFileMatrix(alphaConc, docs.length, this.topics, this.alphaFile);
+                String s = ((RowSumFileMatrix) alpha).build();
+                if (s != null) {
+                    return s;
+                }
             } else {
-                alpha = new RowSumSymetricMatrix(this.alphaConc,this.topics);
-                
+                alpha = new RowSumSymetricMatrix(this.alphaConc, this.topics);
+
             }
             if (betaFile != null) {
-                beta = new RowSumFileMatrix(betaConc,this.topics,vocab,this.betaFile);
-                String s = ((RowSumFileMatrix)beta).build();
-                if (s != null) return s;
+                beta = new RowSumFileMatrix(betaConc, this.topics, vocab, this.betaFile);
+                String s = ((RowSumFileMatrix) beta).build();
+                if (s != null) {
+                    return s;
+                }
             } else {
-                beta = new RowSumSymetricMatrix(this.betaConc,vocab);
-            }            
-            lda = new MultiThreadLDA(docs, bows.get(0).getVocabSize(), topics, alpha, beta, nThreads, cacheSize, seed, dist, statistic, precision);
+                beta = new RowSumSymetricMatrix(this.betaConc, vocab);
+            }
+            lda = new MultiThreadLDA(bowList, docs, vocab, topics, alpha, beta, nThreads, cacheSize, seed, dist, statistic, precision);
         }
 
         lda.setDirectory(iterationDir);
@@ -309,6 +371,7 @@ public class LDA_CommandLine extends CommandLine {
         lda.setBurnIn(skip);
         lda.setThinning(thining);
         lda.setMaxLike(this.maxLikeProcessing);
+        lda.setSaveXML(saveXML);
         lda.call();
         if (cacheSize == 0) {
             this.pointEstimateProcessing = false;
@@ -323,7 +386,7 @@ public class LDA_CommandLine extends CommandLine {
         try {
             if (ldaProcessing) {
                 if (rid == null) {
-                    rid = bows.get(0).getFile().getName().replace(".bow", "");  // base the runid on the first bow file name
+                    rid = bowFiles.get(0).getName().replace(".bow", "");  // base the runid on the first bow file name
                 }
                 ret = runLDA();
             }
@@ -334,9 +397,13 @@ public class LDA_CommandLine extends CommandLine {
                 runChib();
             }
             if (partProcessing) {
-                String runID = bows.get(0).getFile().getName().replace(".bow", "");
-                File[] bowFiles = bows.get(0).partition(nPart, outDir, rnd);  // randomly partition the input bow
+                String runID = bowFiles.get(0).getName().replace(".bow", "");
+                BagOfWords toPart = BagOfWords.factory(bowFiles.get(0), this.bowClass, false);
+                File[] bowFiles = toPart.partition(nPart, outDir, rnd);  // randomly partition the input bow
                 outputPartitionCommands(System.out, bowFiles, runID);
+            }
+            if (docTopicProcessing) {
+                runDocTopics();
             }
         } catch (Exception exc) {
             StringWriter writer = new StringWriter();
@@ -491,6 +558,13 @@ public class LDA_CommandLine extends CommandLine {
         return null;  // no error        
     }
 
+    public String of(String s){
+        return outFile(s);
+    }
+    public String outFile(String s){
+        this.outFile = new File(s);
+        return null;
+    }
     public String o(String s) {
         return out(s);
     }
@@ -522,7 +596,27 @@ public class LDA_CommandLine extends CommandLine {
 
     public String inputPhi(String s) {
         phiFile = new File(s);
-
+        ArrayList<double[]> phiList = new ArrayList<>();
+        try {
+            BufferedReader reader = new BufferedReader(new FileReader(phiFile));
+            String line = reader.readLine();
+            while (line != null) {
+                String[] tokens = line.split(",");
+                double[] topicPhi = new double[tokens.length];
+                for (int i = 0; i < topicPhi.length; ++i) {
+                    topicPhi[i] = Double.valueOf(tokens[i]);
+                }
+                phiList.add(topicPhi);
+                line = reader.readLine();
+            }
+            reader.close();
+        } catch (Exception exc) {
+            return exc.getMessage();
+        }
+        phi = new double[phiList.size()][];
+        for (int i = 0; i < phi.length; ++i) {
+            phi[i] = phiList.get(i);
+        }
         return null; // no error
     }
 
@@ -531,42 +625,39 @@ public class LDA_CommandLine extends CommandLine {
     }
 
     public String inputBOW(String s) {
-        try {
-            BagOfWords b = new BagOfWords(s);
-            int vocab = b.getVocabSize();
-            if (!bows.isEmpty()) {
-                if (vocab != bows.get(0).getVocabSize()) {
-                    return String.format("vocabularly size does not match other BOWS for BOW: %s", s);
-                }
-            }
-            this.bows.add(b);
-
-        } catch (Exception exc) {
-            return String.format("Error reading Bag of Words file: %s", exc.getMessage());
+        if (this.bowClass == null) {
+            this.bowClass = "OriginalBOW";
+        } else if (!this.bowClass.equals("OriginalBOW")) {
+            return "All input files need to be same format";
         }
-        return null;
+        return inputFileBOW(s);
+
     }
+
     public String im(String s) {
         return inputMM(s);
     }
 
     public String inputMM(String s) {
-        try {
-            BagOfWords b = new MatrixMarket(s,true);
-            int vocab = b.getVocabSize();
-            if (!bows.isEmpty()) {
-                if (vocab != bows.get(0).getVocabSize()) {
-                    return String.format("vocabularly size does not match other files, for file: %s", s);
-                }
-            }
-            this.bows.add(b);
 
-        } catch (Exception exc) {
-            return String.format("Error reading Matrix Market file: %s", exc.getMessage());
+        if (this.bowClass == null) {
+            this.bowClass = "MatrixMarket";
+        } else if (!this.bowClass.equals("MatrixMarket")) {
+            return "All input files need to be same format";
         }
+
+        return inputFileBOW(s);
+    }
+
+    private String inputFileBOW(String s) {
+        File f = new File(s);
+        if (!f.exists()) {
+            return String.format("File not found: %s\n", s);
+        }
+        this.bowFiles.add(f);
         return null;
     }
-    
+
     public String s(String s) {
         return seed(s);
     }
@@ -619,6 +710,14 @@ public class LDA_CommandLine extends CommandLine {
         this.ldaProcessing = true;
     }
 
+    public void nosave() {
+        this.saveXML = false;
+    }
+
+    public void binarize() {
+        this.binarize = true;
+    }
+
     public void pe() {
         this.pointEstimateProcessing = true;
     }
@@ -627,9 +726,14 @@ public class LDA_CommandLine extends CommandLine {
         this.chibProcessing = true;
     }
 
-    public void maxLike(){
+    public void doctopics() {
+        this.docTopicProcessing = true;
+    }
+
+    public void maxLike() {
         maxLikeProcessing = true;
     }
+
     public String d(String str) {
         if (str.equalsIgnoreCase("kde") || str.equalsIgnoreCase("empiric") || str.equalsIgnoreCase("topic") || str.equalsIgnoreCase("none")) {
             dist = str;
@@ -717,18 +821,19 @@ public class LDA_CommandLine extends CommandLine {
         System.out.println("\t-pe  \n\t\tpoint estimate from lda iterations");
         System.out.println("\t-chib  \n\t\tchib estimation");
         System.out.println("\t-part  \n\t\tpartition validation, partitions BOW file and writes commands to stdout");
+        System.out.println("\t-doctopics  \n\t\tdetermine document topic distributions for test documents, given topic-word distributions (phi)");
 
         System.out.println("\nLDA Options:");
         System.out.println("\t-a, -alpha (float)\n\t\tDirichlet concentration parameter for document distribution, default=0.1");
         System.out.println("\t-af, -alphaFile (path)\n\t\tfile of vector base measure priors for document distributions, no default");
         System.out.println("\t-b, -beta (float)\n\t\tDirichlet concentration parameter for topic distribution, default=0.1");
         System.out.println("\t-bf, -betaFile (path)\n\t\tfile of vector base measure priors for topic distributions, no default");
-        System.out.println("\t-bi,  binarize the input word counts, default = false");
+        System.out.println("\t-binarize,  binarize the input word counts, default = false");
         System.out.println("\t-ch, -cache (integer)\n\t\tOutput cache size, if cache size = 0 then compute point estimates during lda, default=10");
         System.out.println("\t-ib, -inputBOW (path)\n\t\tinput bag of words file, no default");
-        System.out.println("\t-im, -inputMM (path)\n\t\tinput matrix market file, no default");        
+        System.out.println("\t-im, -inputMM (path)\n\t\tinput matrix market file, no default");
         System.out.println("\t-li, -ldaIterations (integer)\n\t\tnumer of lda iterations, default=1000");
-        System.out.println("\t-maxLike  \n\t\treport the iteration with the maximum likelihood");        
+        System.out.println("\t-maxLike  \n\t\treport the iteration with the maximum likelihood");
         System.out.println("\t-o, -out (path)\n\t\tmain output directory for LDA iterations, no default");
         System.out.println("\t-t, -topic (integer)\n\t\tnumber of topics,  no default");
         System.out.println("\t-tn, -thinning (integer)\n\t\titeration interval between saves, default=1");
@@ -751,6 +856,15 @@ public class LDA_CommandLine extends CommandLine {
         System.out.println("Includes all LDA, Point Estimation, and Chib Options:");
         System.out.println("\t-p, -partitions (integer)\n\t\tnumber of partitions of input bow, default=5");
 
+        System.out.println("\nDocument-Topic Estimation Options:");
+        System.out.println("\t-a, -alpha (float)\n\t\tDirichlet concentration parameter for document distribution, default=0.1");
+        System.out.println("\t-ib, -inputBOW (path)\n\t\tinput bag of words file, no default");
+        System.out.println("\t-im, -inputMM (path)\n\t\tinput matrix market file, no default");        
+        System.out.println("\t-ip, -inputPhi (path)\n\t\tinput phi(topic-word distributions) file from an LDA run, no default");
+        System.out.println("\t-li, -ldaIterations (integer)\n\t\tnumber of iterations, default=1000");
+        System.out.println("\t-of, -outFile (path)\n\t\toutput file , no default");
+        System.out.println("\t-s, -seed (long integer)\n\t\trandom number generator seed, default=1000");
+        System.out.println("\t-th, -threads (integer)\n\t\tnumber of threads to use, default=1");
     }
 
     static public void main(String[] args) {

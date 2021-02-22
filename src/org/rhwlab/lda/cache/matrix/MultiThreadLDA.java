@@ -21,6 +21,8 @@ import java.util.concurrent.Future;
 import org.jdom2.Element;
 import org.jdom2.output.Format;
 import org.jdom2.output.XMLOutputter;
+import org.rhwlab.lda.BagOfWords;
+import org.rhwlab.lda.BagOfWordsList;
 import org.rhwlab.lda.cache.DocumentTopicCounts;
 import org.rhwlab.lda.cache.WordTopicCounts;
 
@@ -30,7 +32,6 @@ import org.rhwlab.lda.cache.WordTopicCounts;
  */
 public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
 
-    
     int[][] nw;  //  V x K ,vocab by topic
     int[] nwsum;  // K , sum over vocab
 
@@ -43,20 +44,20 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
 
 //    List<int[][]> nwCache = new ArrayList<>();
 //    List<int[][]>[] ndCaches;
-
     PointEstimateDistribution peDist;
     String statistic;
-    
-    boolean maxLike=false;  //  if true, the iteration with the maximum likelihood is found during iterations
+
+    boolean maxLike = false;  //  if true, the iteration with the maximum likelihood is found during iterations
     double logLike = Double.NEGATIVE_INFINITY;
     int[][] maxLikeZ = null;
-    
-    public MultiThreadLDA(int[][] documents, int V, int K, RowSumMatrix alpha, RowSumMatrix beta, int nThreads, int cSize,String dist,String stat,double prec) {
-        this(documents, V, K, alpha, beta, nThreads, cSize, 900,dist,stat,prec);
+    boolean saveXML;
+
+    public MultiThreadLDA(BagOfWordsList bows, int[][] documents, int V, int K, RowSumMatrix alpha, RowSumMatrix beta, int nThreads, int cSize, String dist, String stat, double prec) {
+        this(bows, documents, V, K, alpha, beta, nThreads, cSize, 900, dist, stat, prec);
     }
 
-    public MultiThreadLDA(int[][] documents, int V, int K, RowSumMatrix alpha, RowSumMatrix beta, int nThreads, int cSize, long seed, String dist,String stat,double prec) {
-        super(nThreads);
+    public MultiThreadLDA(BagOfWordsList bows, int[][] documents, int V, int K, RowSumMatrix alpha, RowSumMatrix beta, int nThreads, int cSize, long seed, String dist, String stat, double prec) {
+        super(nThreads, bows);
         this.docs = documents;
         this.D = documents.length;
         this.V = V;
@@ -66,16 +67,17 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
         this.cacheSize = cSize;
         this.statistic = stat;
 
-/*
+        /*
         ndCaches = new List[nThreads];
         for (int i = 0; i < nThreads; ++i) {
             ndCaches[i] = new ArrayList<>();
         }
-*/
+         */
         // build all the workers
         int nDocs = documents.length / nThreads + 1;  // number of documents per thread
         int start = 0;
         for (int t = 0; t < nThreads; ++t) {
+            System.out.printf("Constructing worker %d\n", t);
             int n = Math.min(nDocs, documents.length - start);
             int[][] workerDocs = new int[n][];
             for (int i = 0; i < workerDocs.length; ++i) {
@@ -96,15 +98,20 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
         nw = new int[V][K];
         nwsum = new int[K];
 
+        System.out.println("Accumulating initial counts");
         accumCounts();
+        System.out.println("Adding up total words");
         for (int d = 0; d < documents.length; ++d) {
             totalWords = totalWords + documents[d].length;
         }
+        System.out.printf("Total words: %d\n", totalWords);
         if (cSize == 0) {
-            if (dist.equalsIgnoreCase("topic")){
+            if (dist.equalsIgnoreCase("topic")) {
+                System.out.println("Forming Topic Histogram Estimator");
                 peDist = new TopicHistogramEstimator(documents, V, K);
-            } else if (dist.equalsIgnoreCase("kde")){
-                peDist = new MarginalKDE(documents, V, K,prec);
+                System.out.println("Finsihed Topic Histogram Estimator");
+            } else if (dist.equalsIgnoreCase("kde")) {
+                peDist = new MarginalKDE(documents, V, K, prec);
             }
         }
 
@@ -112,13 +119,13 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
 
     // restart the LDA from a state saved in directory
     public MultiThreadLDA(File dir) throws Exception {
-        super(dir);     
+        super(dir);
         System.out.printf("MultiThreadLDA: directory %s\n", dir.getPath());
-        outputDir = dir;       
+        outputDir = dir;
         workersArray = new WorkerLDA[nWorkers];
-               
+
         // load up the workers from saved state
-        for (int i=0 ; i<nWorkers ; ++i) {
+        for (int i = 0; i < nWorkers; ++i) {
             WorkerLDA worker = new WorkerLDA(this.workerXMLFiles[i]);
             workersArray[i] = worker;
             this.workers.add(worker);
@@ -135,16 +142,15 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
         docs = MultiThreadXML.getDocuments(workersArray);
     }
 
-
     public File saveAsXML(File outDir) throws Exception {
-        
+
         // save all the worker xmls
         for (int i = 0; i < this.workersArray.length; ++i) {
             this.workerXMLFiles[i] = workersArray[i].saveAsXML(outDir);
         }
-        
+
         File xmlFile = new File(outDir, "MultiThreadLDA.xml");
-        System.out.printf("Saving xml file: %s\n",xmlFile.getPath());
+        System.out.printf("Saving xml file: %s\n", xmlFile.getPath());
         Element ele = super.toXML();
         OutputStream stream = new FileOutputStream(xmlFile);
         XMLOutputter xmlOut = new XMLOutputter(Format.getPrettyFormat());
@@ -161,6 +167,7 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
         // copy the new word counts to all the workers
         // each worker has a local area for these counts that it modifies during an iteraton
         for (int w = 0; w < workers.size(); ++w) {
+            //           System.out.printf("copy counts to worker %d\n",w);
             int[][] c = workersArray[w].getGlobalWordTopicCounts();
             for (int i = 0; i < c.length; ++i) {
                 for (int j = 0; j < c[i].length; ++j) {
@@ -185,6 +192,7 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
         }
 
         for (WorkerLDA worker : workersArray) {
+            //           System.out.printf("Accum count from worker %s\n", worker.workID);
             int[][] c = worker.getWordTopicCounts();
             for (int i = 0; i < c.length; ++i) {
                 for (int j = 0; j < c[i].length; ++j) {
@@ -209,22 +217,23 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
     public Object call() throws Exception {
         ExecutorService service = Executors.newWorkStealingPool();
         for (int i = 1; i <= iterations; i++) {
-            System.out.printf("Iteration: %d\n", i);
+            if (i % 10 == 0) {
+                System.out.printf("Iteration: %d\n", i);
+            }
             List<Future<Object>> futures = service.invokeAll(workers);
             accumCounts();
 
             if (peDist != null && i >= burnIn * thinning && i % thinning == 0) {
                 peDist.add(this.getZ());
             }
-            if (maxLike){
+            if (maxLike) {
                 int[][] nd = this.getDocumentTopicCounts();
-                Likelihood like = new Likelihood(docs,nw,nd,alpha,beta,i);
+                Likelihood like = new Likelihood(docs, nw, nd, alpha, beta, i);
                 double logL = like.call();
-                if (i == 1){
+                if (i == 1) {
                     this.logLike = logL;
-                    this.maxLikeZ = this.getZ(); 
-                }
-                else if (logL > this.logLike){
+                    this.maxLikeZ = this.getZ();
+                } else if (logL > this.logLike) {
                     this.logLike = logL;
                     this.maxLikeZ = this.getZ();
                 }
@@ -234,32 +243,34 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
         for (int w = 0; w < this.workersArray.length; ++w) {
             workersArray[w].flushCache();
         }
-        saveAsXML(outputDir);
+        if (saveXML) {
+            saveAsXML(outputDir);
+        }
         if (peDist != null) {
             // report the point estimate 
             peDist.statisticReport(outputDir, statistic, burnIn, alpha, beta, totalWords, this.docs, iterations + iterationOffset, K, V);
         }
-        
+
         // report the maximum likelihood iteration
-        if (maxLike){
-            DocumentTopicCounts dtc = new DocumentTopicCounts(maxLikeZ,K);
+        if (maxLike) {
+            DocumentTopicCounts dtc = new DocumentTopicCounts(maxLikeZ, K);
             int[][] nd = dtc.call();
-            WordTopicCounts wtc = new WordTopicCounts(maxLikeZ,V,K,docs);
+            WordTopicCounts wtc = new WordTopicCounts(maxLikeZ, V, K, docs);
             int[][] nw = wtc.call();
-            
-            PrintStream stream = new PrintStream(new File(outputDir,"MaxLikelihoodTopics.txt"));
-            printIntegerMatrix(stream,maxLikeZ);
+
+            PrintStream stream = new PrintStream(new File(outputDir, "MaxLikelihoodTopics.txt"));
+            printIntegerMatrix(stream, maxLikeZ);
             stream.close();
-            
-            stream = new PrintStream(new File(outputDir,"MaxLikelihoodDocumentTopicCounts.txt"));
-            printIntegerMatrix(stream,nd);
+
+            stream = new PrintStream(new File(outputDir, "MaxLikelihoodDocumentTopicCounts.txt"));
+            printIntegerMatrix(stream, nd);
             stream.close();
-            
-            stream = new PrintStream(new File(outputDir,"MaxLikelihoodWordTopicCounts.txt"));
-            printIntegerMatrix(stream,nw);
-            stream.close(); 
-            
-            stream = new PrintStream(new File(outputDir,"MaxLogLikelihood.txt"));
+
+            stream = new PrintStream(new File(outputDir, "MaxLikelihoodWordTopicCounts.txt"));
+            printIntegerMatrix(stream, nw);
+            stream.close();
+
+            stream = new PrintStream(new File(outputDir, "MaxLogLikelihood.txt"));
             stream.printf("%f\n", logLike);
             stream.close();
         }
@@ -286,6 +297,10 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
         }
     }
 
+    public void setSaveXML(boolean b) {
+        saveXML = b;
+    }
+
     public void setBurnIn(int s) {
         burnIn = s;
     }
@@ -294,9 +309,10 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
         this.iterations = it;
     }
 
-    public void setMaxLike(boolean b){
+    public void setMaxLike(boolean b) {
         this.maxLike = b;
     }
+
     public int[][] getDocuments() {
         return docs;
     }
@@ -363,18 +379,19 @@ public class MultiThreadLDA extends MultiThreadXMLBase implements Callable {
         return this.nw;
     }
 
-    public double getMaxLogLikelihood(){
+    public double getMaxLogLikelihood() {
         return this.logLike;
     }
-    public int[][] getMaxLikelihoodZ(){
+
+    public int[][] getMaxLikelihoodZ() {
         return this.maxLikeZ;
     }
-    
-    static void printIntegerMatrix(PrintStream stream,int[][] m){
-        for (int r=0 ; r<m.length ; ++r){
+
+    static void printIntegerMatrix(PrintStream stream, int[][] m) {
+        for (int r = 0; r < m.length; ++r) {
             stream.printf("%d", m[r][0]);
-            for (int c=1 ; c<m[r].length ; ++c){
-                stream.printf(",%d",m[r][c]);
+            for (int c = 1; c < m[r].length; ++c) {
+                stream.printf(",%d", m[r][c]);
             }
             stream.println();
         }

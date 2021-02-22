@@ -5,6 +5,9 @@
  */
 package org.rhwlab.lda.cache.matrix;
 
+import java.util.ArrayList;
+import java.util.Map.Entry;
+import java.util.TreeMap;
 import org.rhwlab.lda.cache.DocumentTopicCounts;
 import org.rhwlab.lda.cache.PointEstimates;
 import org.rhwlab.lda.cache.WordTopicCounts;
@@ -19,6 +22,7 @@ public class TopicHistogramEstimator extends PointEstimatorDistBase {
     int nVocab;
     int[][] docs;
     int[][][] hists;
+    int[][] modes = null;
 
     public TopicHistogramEstimator(int[][] docs, int nVocab, int nTopics) {
         super();
@@ -27,6 +31,9 @@ public class TopicHistogramEstimator extends PointEstimatorDistBase {
         this.docs = docs;
         hists = new int[docs.length][][];
         for (int i = 0; i < hists.length; ++i) {
+            if (i % 10000 == 0) {
+                System.out.printf("TopicHistogramEstimator: doc %d\n", i);
+            }
             hists[i] = new int[docs[i].length][];
             for (int j = 0; j < hists[i].length; ++j) {
                 hists[i][j] = new int[nTopics];
@@ -34,20 +41,61 @@ public class TopicHistogramEstimator extends PointEstimatorDistBase {
         }
     }
 
-    /*
-    public TopicHistogramEstimator(ZDirectory zDir) throws Exception {
+    public TopicHistogramEstimator(ZDirectory zDir, int skip) throws Exception {
         super(zDir);
-        zHist = zDir.zHistogram();
-        nVocab = zDir.getLDA().getVocabSize();
-        nTopics = zDir.getLDA().getTopicsSize();
-        docs = zDir.getLDA().getDocuments();
+
+        // calculate the topic modes for each document/token by worker
+        CompletedRunLDA lda = zDir.getCompletedRun();
+        nVocab = lda.getVocabSize();
+        nTopics = lda.getTopicsSize();
+        docs = lda.getDocuments();
+        modes = new int[docs.length][];
+        int d = 0;
+        int m=0;
+        int nWorkers = lda.getWorkersSize();
+        
+        for (int w = 0; w < nWorkers; ++w) {
+            int iter = 0;
+            TopicHistogramEstimator wEst = null;
+            TreeMap<Integer, WorkerZIterationFile> workerFiles = zDir.getWorkerFiles(w);
+            Entry e = workerFiles.firstEntry();
+            while (e != null) {
+                Integer iteration = (Integer) e.getKey();
+                WorkerZIterationFile wziFile = (WorkerZIterationFile) e.getValue();
+                ArrayList<int[][]> zlist = wziFile.readZlist();
+                if (wEst == null) {
+                    int[][] z = zlist.get(0);
+                    int[][] wdocs = new int[z.length][];
+                    for (int i = 0; i < wdocs.length; ++i) {
+                        wdocs[i] = docs[d];
+                        ++d;
+                    }
+                    wEst = new TopicHistogramEstimator(wdocs, nVocab, nTopics);
+                }
+
+                // add the iterations for this worker
+                for (int[][] z : zlist) {
+                    ++iter;
+                    if (iter > skip) {
+                        wEst.add(z);
+                    }
+                }
+
+                e = workerFiles.higherEntry(iteration);
+            }
+            int[][] wModes = wEst.getModes();
+            for (int i=0 ; i<wModes.length ; ++i){
+                modes[m] = wModes[i];
+                ++m;
+            }
+        }
     }
-     */
+
     @Override
     public PointEstimates getEstimates(String stat) throws Exception {
 
         int[][] modes = getModes();
-        
+
         int[][] nw = WordTopicCounts.wordTopicCounts(modes, nVocab, nTopics, docs);
         double[][] wordEst = new double[nVocab][nTopics];
         for (int i = 0; i < nVocab; ++i) {
@@ -71,7 +119,6 @@ public class TopicHistogramEstimator extends PointEstimatorDistBase {
         return "topic";
     }
 
-
     @Override
     public void add(Object obj) {
         int[][] z;
@@ -89,22 +136,21 @@ public class TopicHistogramEstimator extends PointEstimatorDistBase {
     }
 
     public int[][] getModes() {
-        int[][] modes = new int[hists.length][];  // doc,word -> topic (mode)
-        for (int d = 0; d < hists.length; ++d) {
-            modes[d] = new int[hists[d].length];
-            for (int w = 0; w < hists[d].length; ++w) {
-                int max = 0;
-                int mode = -1;
-                for (int t = 0; t < hists[d][w].length; ++t) {
-                    if (hists[d][w][t] > max) {
-                        max = hists[d][w][t];
-                        mode = t;
+        if (modes == null) {
+            modes = new int[hists.length][];  // doc,word -> topic (mode)
+            for (int d = 0; d < hists.length; ++d) {
+                modes[d] = new int[hists[d].length];
+                for (int w = 0; w < hists[d].length; ++w) {
+                    int max = 0;
+                    int mode = -1;
+                    for (int t = 0; t < hists[d][w].length; ++t) {
+                        if (hists[d][w][t] > max) {
+                            max = hists[d][w][t];
+                            mode = t;
+                        }
                     }
+                    modes[d][w] = mode;
                 }
-                if (mode == -1){
-                    int asiudfhsduhfuisd=0;
-                }
-                modes[d][w] = mode;
             }
         }
         return modes;

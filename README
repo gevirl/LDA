@@ -1,0 +1,134 @@
+This software is an extension and modification of LdaGibbsSampler.java   http://www.arbylon.net/projects/LdaGibbsSampler.java written by Gregor Heinrich 
+
+INTRODUCTION
+
+Latent Dirichlet Allocation (LDA) has proven to be an effective algorithm for dimensional reduction. One disadvantage is long run times for large data sets with many documents and large vocabularies. This is the case when using LDA on single cell genomic data sets, which typically could measure 30,000 features (vocabulary) in 100,000 cells (documents).  This program was created to address that problem by multiprocessing. 
+
+The model parameters are inferred with a collapsed Gibbs sampler as described in Griffiths and Steyvers, Finding scientific topics ( https://www.ncbi.nlm.nih.gov/pmc/articles/PMC387300/) .  Adhering to some best practices in Bayesian analysis implementation, several features are incorporated into this program. 
+
+1) the proposed model parameters at every iteration can be recorded for analysis. This is helpful for visualizing the iteration values and to determine if the sampling has stably converged and if there is good mixing of the sampling. The iteration parameter values are also available for post-iteration point estimates of the parameters. Other implementations of LDA report the values of the parameters at just the final iteration.
+
+2) the complete internal state is saved at the conclusion of the specified number of iterations, so that the algorithm can be restarted with more iterations. This is a time savings if the initial number of iterations chosen was insufficient.
+
+3) several possible point estimates are provided for the final choice of parameter values, and since the parameter values at every iteration can be recorded, novel point estimates can be implemented. The point estimate procedure is run after completing all the iterations. An appropriate burn in can be selected by examining the saved iteration parameter values.
+
+4) once the number of iterations and approach to point estimate calculations have been chosen, the program can be run without saving the proposed parameter values at each iteration. This will be a considerable time savings for running additional data sets. The point estimates are computed in a running fashion with the values from each iteration after burn in.
+
+INSTALLATION/RUNNING 
+
+This program is a java application that is a NetBeans-8.1 project. It can be run without opening the project in Netbeans by using the dist.zip file distribution. This zip file includes the jar file and needed libraries. 
+
+1) clone this GitHub repository
+2) unzip the LDA-master.zip
+3) unzip the distribution file dist.zip
+4) run the jar file  dist/LatentDirichletAllocation.jar
+
+The main entry point to the jar file is the class: org.rhwlab.lda.cache.matrix.LDA_CommandLine
+After unzipping the dist.zip file, the program can be run with:
+java -jar  “your_directory”/dist/LatentDirichletAllocation.jar [options]
+
+MULTIPROCESSING
+
+In general, performance will improve as the number of processes increases up to a limit. There is overhead due to the communication and exchange of information between processes. This overhead will eventually cancel any benefit gained from multiprocessing as the number of processes increase. 
+
+MODEL EVALUATION
+
+An evaluation metric has been incorporated into the program to assess a trained model. The program will estimate the probability of a set of documents held out from a given trained model. Several   methods for estimating this probability of a topic model have been described.  https://mimno.infosci.cornell.edu/papers/wallach09evaluation.pdf  The Chib-style estimation from this publication was implemented.
+
+A cross validation capability has been included. The input documents are randomly split into N same size subsets.  In turn, each of the N subsets are withheld and the model is run on the remaining N-1 subsets. The likelihood of the withheld set of documents is then estimated with the Chib-style estimator. The log likelihoods or perplexities of the withheld documents are the evaluation metrics of the model.
+
+INPUT DATA FORMAT 
+
+The input is specified in a bag of words format. The documents and the words of the vocabulary are designated as 1-based integers. The first three lines of the file are 1) the number of documents 2) the size of the vocabulary 3) unused integer (left in place for for compatibility to earlier versions). The remaining lines in the file have three integer values, separated by tab, or single space. Column 1 is the document number, column 2 is the number in the vocabulary, and column 3 is the number of words in that document for that member of vocabulary.  The documents must be in ascending value and there cannot be missing values.
+
+
+SPECIFYING HYPER PARAMETERS
+
+The hyper parameters for the LDA model are the concentration parameters for topic/vocabulary and the document/topic Dirichlet distribution, which are the priors of the LDA model. For some LDA implementations these distributions are assumed to be symmetric Dirichlet distributions. In that case the Dirichlet distribution can be parameterized with a single scalar value. It is also assumed that this same symmetric Dirichlet distribution can be used as prior for all the topic/vocabulary distributions and all the document/topic distributions.  This approach has been implemented here, so that a single scalar value can be provided for all the document/topic distributions and a second single scalar value for all the topic/vocabulary distributions. The vector of parameter values for the Dirichlet distributions is generated by dividing the specified scalar by the number of topics for the document/topic distributions and by the vocabulary size for the topic/vocabulary distributions. 
+
+The specification of the hyper parameters has been extended beyond this approach, to allow specification of the concentration parameters as matrices, rather than single scalar values.  This permits prior knowledge to be incorporated into the model.
+
+COMMAND LINE  USAGE
+
+There are three separate processing directives incorporated into the the jar file. These are 1) run the LDA iterations to estimate the model parameters 2) run a process to make point estimates of the output parameter distributions and 3) perform a validation estimation of a trained model. 4) partition the input data and generate the commands needed to process the partitioned data with validation estimation.
+
+The various options will be listed if the jar file is run with -h or -help
+
+java -jar LatentDirichletAllocation.jar -h
+
+Description - Latent Dirichlet Allocation (binary iteration output)
+
+General Options:
+	-r, -rid (string) 
+		user supplied run identification, default based on bow file, topics, alpha, and beta
+	-s, -seed (long integer)
+		random number generator seed, default=1000
+	-th, -threads (integer)
+		number of threads to use for LDA and Chib, default=1
+
+Processing Directives:
+	-lda  
+		lda iterations
+	-pe  
+		point estimate from lda iterations
+	-chib  
+		chib estimation
+	-part  
+		partition validation, partitions BOW file and writes commands to stdout
+
+LDA Options:
+	-a, -alpha (float)
+		Dirichlet concentration parameter for document distribution, default=0.1
+	-af, -alphaFile (path)
+		file of vector base measure priors for document distributions, no default
+	-b, -beta (float)
+		Dirichlet concentration parameter for topic distribution, default=0.1
+	-bf, -betaFile (path)
+		file of vector base measure priors for topic distributions, no default
+	-binarize,  binarize the input word counts, default = false
+	-ch, -cache (integer)
+		Output cache size, if cache size = 0 then compute point estimates during lda, default=10
+	-ib, -inputBOW (path)
+		input bag of words file, no default
+	-im, -inputMM (path)
+		input matrix market file, no default
+	-li, -ldaIterations (integer)
+		numer of lda iterations, default=1000
+	-maxLike  
+		report the iteration with the maximum likelihood
+	-o, -out (path)
+		main output directory for LDA iterations, no default
+	-t, -topic (integer)
+		number of topics,  no default
+	-tn, -thinning (integer)
+		iteration interval between saves, default=1
+
+Point Estimator Options:
+	-d, -dist (topic/kde/empiric/none)
+		type of distribution to use for point estimates, default = kde
+	-id, -iterDir (path)
+		input directory of LDA iterations, will use lda output directory if -pe and -lda used together as the default
+	-pr, -precision (float)
+		precision for KDE distribution, default=1
+	-st, -statistic (mean/mode)
+		statistic of the distribution to report, default = mode
+	-sk, -skip (integer)
+		number of initial records to skip , default = 0
+	-v, -verbose (0-7)
+		verbose level of output, default = 1;
+
+Chib Estimation Options:
+	-ci, -chibIterations (integer)
+		number of Chib validation iterations, default=1000
+	-cb, -chibBurn (integer)
+		Chib validation burnin, default=200
+	-ic, -inputChibBOW (path)
+		input bag of words file, no default
+	-ip, -inputPhi (path)
+		input phi file, for Chib validation, no default
+
+Partition Validation Options:
+Includes all LDA, Point Estimation, and Chib Options:
+	-p, -partitions (integer)
+		number of partitions of input bow, default=5
+
